@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <title>cannon.js中使用协程</title>
+
+    <style>
+        body {
+            font-family: Monospace;
+            background-color: #000;
+            color: #000;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        #info {
+            text-align: center;
+            padding: 10px;
+            z-index: 10;
+            width: 100%;
+            position: absolute;
+            color: white;
+        }
+
+    </style>
+
+    <script src="../cannon.js/libs/Three.js"></script>
+    <script src="../cannon.js/libs/Detector.js"></script>
+    <script src="../cannon.js/libs/TrackballControls.js"></script>
+</head>
+<body>
+
+<div id="info">
+    Cannon.js 协程demo
+</div>
+
+<script id="worker1">
+    var world;
+    self.onmessage = function(e) {
+
+        if (e.data.cannonUrl && !world) {
+            // 加载cannon.js
+            importScripts(e.data.cannonUrl);
+
+            // 初始化物理场景
+            world = new CANNON.World();
+            world.broadphase = new CANNON.NaiveBroadphase();
+            world.gravity.set(0, -10, 0);
+            world.solver.tolerance = 0.001;
+
+            // 地面
+            var plane = new CANNON.Plane();
+            var groundBody = new CANNON.Body({ mass: 0 });
+            groundBody.addShape(plane);
+            groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI/2);
+            world.addBody(groundBody);
+
+            // 创建N个方块
+            var shape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5));
+            for (var i = 0; i!== e.data.N; i++) {
+                var body = new CANNON.Body({mass: 1});
+                body.addShape(shape);
+                body.position.set(Math.random() - 0.5, 2.5 * i + 0.5, Math.random() - 0.5);
+                world.addBody(body);
+            }
+
+        }
+
+        // 设置物理世界
+        world.step(e.data.dt);
+
+        // 覆盖缓冲中的数据
+        var positions = e.data.positions;
+        var quaternions = e.data.quaternions;
+        for(var i = 0; i !== world.bodies.length; i++){
+            var b = world.bodies[i],
+                    p = b.position,
+                    q = b.quaternion;
+
+            positions[3*i + 0] = p.x;
+            positions[3*i + 1] = p.y;
+            positions[3*i + 2] = p.z;
+
+            quaternions[4*i + 0] = q.x;
+            quaternions[4*i + 1] = q.y;
+            quaternions[4*i + 2] = q.z;
+            quaternions[4*i + 3] = q.w;
+        }
+
+        // 将数据传送回主线程
+        self.postMessage({
+            positions: positions,
+            quaternions: quaternions
+        }, [
+            positions.buffer,
+            quaternions.buffer
+        ]);
+    };
+</script>
+
+<script>
+    // 参数
+    var dt = 1/60, N = 40;
+
+    // 数据数组,包括需要渲染的所有动力学数据
+    var positions = new Float32Array(N*3);
+    var quaternions = new Float32Array(N*4);
+
+    // 从worker code创建一个blob(二进制大对象)
+    var blob = new Blob([document.querySelector("#worker1").textContent],{type: "text/javascript"});
+
+    // 创建worker
+    var worker = new Worker(window.URL.createObjectURL(blob));
+    worker.postMessage = worker.webkitPostMessage || worker.postMessage;
+
+    var sendTime; // 发送最后一条消息的时间
+    worker.onmessage = function(e) {
+
+        // 从worker获取最新数据
+        positions = e.data.positions;
+        quaternions = e.data.quaternions;
+
+        // 更新渲染的网格
+        for (var i = 0; i !== meshes.length; i++) {
+            meshes[i].position.set( positions[3*i+0],
+                    positions[3*i+1],
+                    positions[3*i+2] );
+
+            meshes[i].quaternion.set(quaternions[4*i+0],
+                    quaternions[4*i+1],
+                    quaternions[4*i+2],
+                    quaternions[4*i+3]);
+        }
+
+        // 如果协程速度超过了主线程时间步长(dt秒),就延迟到下一个时间步长
+        var delay = dt * 1000 - (Date.now() - sendTime);
+        if (delay < 0) {
+            delay = 0;
+        }
+        setTimeout(sendDataToWorker, delay);
+    };
+
+    function sendDataToWorker() {
+        sendTime = Date.now();
+        worker.postMessage({
+            N: N,
+            dt: dt,
+            cannonUrl: document.location.href.replace(/\/[^/]*$/,"/") + "../cannon.js/libs/cannon.min.js",
+            positions: positions,
+            quaternions: quaternions
+        }, [positions.buffer, quaternions.buffer]);
+    }
+
+    // 初始化Three.js
+
+    if (!Detector.webgl) Detector.addGetWebGLMessage();
+
+    var container, camera, controls, scene, renderer, mesh;
+    var meshes = [];
+
+    init();
+    animate();
+
+    function init() {
+        container = document.createElement( 'div' );
+        document.body.appendChild( container );
+
+        // 场景
+        scene = new THREE.Scene();
+        scene.fog = new THREE.Fog(0x000000, 500, 10000);
+
+        // 相机
+        camera = new THREE.PerspectiveCamera( 30, window.innerWidth / window.innerHeight, 0.5, 10000 );
+        camera.position.set(Math.cos( Math.PI/5 ) * 30,
+                5,
+                Math.sin( Math.PI/5 ) * 30);
+        scene.add( camera );
+
+        // 控制器(轨迹球控制器)
+        controls = new THREE.TrackballControls( camera );
+        controls.rotateSpeed = 1.0;
+        controls.zoomSpeed = 1.2;
+        controls.panSpeed = 0.8;
+        controls.noZoom = false;
+        controls.noPan = false;
+        controls.staticMoving = true;
+        controls.dynamicDampingFactor = 0.3;
+        controls.keys = [ 65, 83, 68 ];
+
+        // 灯光
+        var light, materials;
+        scene.add( new THREE.AmbientLight( 0x666666 ) );
+
+        light = new THREE.DirectionalLight( 0xffffff, 1.75 );
+        var d = 20;
+
+        light.position.set( d, d, d );
+
+        light.castShadow = true;
+        //light.shadowCameraVisible = true;
+
+        light.shadowMapWidth = 1024;
+        light.shadowMapHeight = 1024;
+
+        light.shadowCameraLeft = -d;
+        light.shadowCameraRight = d;
+        light.shadowCameraTop = d;
+        light.shadowCameraBottom = -d;
+
+        light.shadowCameraFar = 3*d;
+        light.shadowCameraNear = d;
+        light.shadowDarkness = 0.5;
+
+        scene.add( light );
+
+        // 地面
+        geometry = new THREE.PlaneGeometry( 100, 100, 1, 1 );
+        material = new THREE.MeshLambertMaterial( { color: 0x777777 } );
+        mesh = new THREE.Mesh( geometry, material );
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        meshes.push(mesh);
+        scene.add( mesh );
+
+        // N个方块
+        var cubeGeo = new THREE.BoxGeometry( 1, 1, 1, 10, 10 );
+        var cubeMaterial = new THREE.MeshPhongMaterial( { color: 0x888888 } );
+        for(var i=0; i<N; i++){
+            var cubeMesh = new THREE.Mesh( cubeGeo, cubeMaterial );
+            cubeMesh.castShadow = true;
+            meshes.push(cubeMesh);
+            scene.add( cubeMesh );
+        }
+
+        // 渲染器
+        renderer = new THREE.WebGLRenderer({antialias: true});
+        renderer.setSize( window.innerWidth, window.innerHeight );
+        renderer.setClearColor( scene.fog.color );
+
+        container.appendChild( renderer.domElement );
+
+        renderer.gammaInput = true;
+        renderer.gammaOutput = true;
+        renderer.shadowMapEnabled = true;
+
+        window.addEventListener( 'resize', onWindowResize, false );
+    }
+
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        controls.handleResize();
+        renderer.setSize( window.innerWidth, window.innerHeight );
+    }
+
+    function render() {
+        renderer.render(scene, camera);
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        render();
+    }
+
+    // 启动worker!
+    sendDataToWorker();
+</script>
+
+</body>
+</html>
