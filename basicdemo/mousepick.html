@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>鼠标选取</title>
+
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin:0;
+            padding:0;
+            overflow: hidden;
+        }
+    </style>
+
+    <script src="../cannon.js/libs/Three.js"></script>
+    <script src="../cannon.js/libs/Detector.js"></script>
+    <script src="../cannon.js/build/cannon.js"></script>
+</head>
+<body>
+
+<script>
+    var world;
+    var dt = 1 / 60;
+
+    var constraintDown = false;
+    var camera, scene, renderer, gplane=false, clickMarker=false;
+    var geometry, material, mesh;
+    var markerMaterial;
+    var controls,time = Date.now();
+
+    var jointBody, constrainedBody, mouseConstraint;
+
+    var N = 5;
+
+    var container, projector;
+
+    // 同步数据
+    var meshes=[], bodies=[];
+
+    // 初始化Three.js
+    if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
+
+    initCannon();
+    init();
+    animate();
+
+    function initCannon() {
+        // 设置物理世界
+        world = new CANNON.World();
+        world.quatNormalizeSkip = 0;
+        world.quatNormalizeFast = false;
+
+        world.gravity.set(0,-10,0);
+        world.broadphase = new CANNON.NaiveBroadphase();
+
+        // 创建盒子
+        var mass = 5, radius = 1.3;
+        var boxShape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5));
+        for (var i = 0, y = 1; i < N; i++,y++) {
+            var boxBody = new CANNON.Body({mass: mass});
+            boxBody.addShape(boxShape);
+            boxBody.position.set(0, y, 0);
+            world.addBody(boxBody);
+            bodies.push(boxBody);
+        }
+
+        // 创建地面
+        var groundShape = new CANNON.Plane();
+        var groundBody = new CANNON.Body({ mass: 0 });
+        groundBody.addShape(groundShape);
+        groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0),-Math.PI/2);
+        world.addBody(groundBody);
+
+        // 联合 body(鼠标点击事的小球)
+        var shape = new CANNON.Sphere(0.1);
+        jointBody = new CANNON.Body({mass: 0});
+        jointBody.addShape(shape);
+        jointBody.collisionFilterGroup = 0;
+        jointBody.collisionFilterMask = 0;
+        world.addBody(jointBody);
+    }
+
+    function init() {
+        projector = new THREE.Projector();
+
+        container = document.createElement("div");
+        document.body.appendChild(container);
+
+        // 场景
+        scene = new THREE.Scene();
+        scene.fog = new THREE.Fog(0x000000, 500, 10000);
+
+        // 相机
+        camera = new THREE.PerspectiveCamera( 30, window.innerWidth / window.innerHeight, 0.5, 10000 );
+        camera.position.set(10, 2, 0);
+        camera.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.PI/2);
+        scene.add(camera);
+
+        // 光照
+        var light, materials;
+        scene.add( new THREE.AmbientLight( 0x666666 ) );
+
+        light = new THREE.DirectionalLight( 0xffffff, 1.75 );
+        var d = 20;
+
+        light.position.set( d, d, d );
+
+        light.castShadow = true;
+        //light.shadowCameraVisible = true;
+
+        light.shadowMapWidth = 1024;
+        light.shadowMapHeight = 1024;
+
+        light.shadowCameraLeft = -d;
+        light.shadowCameraRight = d;
+        light.shadowCameraTop = d;
+        light.shadowCameraBottom = -d;
+
+        light.shadowCameraFar = 3*d;
+        light.shadowCameraNear = d;
+        light.shadowDarkness = 0.5;
+
+        scene.add( light );
+
+        // 地面
+        geometry = new THREE.PlaneGeometry( 100, 100, 1, 1 );
+        //geometry.applyMatrix( new THREE.Matrix4().makeRotationX( -Math.PI / 2 ) );
+        material = new THREE.MeshLambertMaterial( { color: 0x777777 } );
+        markerMaterial = new THREE.MeshLambertMaterial( { color: 0xff0000 } );
+        //THREE.ColorUtils.adjustHSV( material.color, 0, 0, 0.9 );
+        mesh = new THREE.Mesh( geometry, material );
+        mesh.castShadow = true;
+        mesh.quaternion.setFromAxisAngle(new THREE.Vector3(1,0,0), -Math.PI / 2);
+        mesh.receiveShadow = true;
+        scene.add(mesh);
+
+        // 方块
+        var cubeGeo = new THREE.BoxGeometry( 1, 1, 1, 10, 10 );
+        var cubeMaterial = new THREE.MeshPhongMaterial( { color: 0x888888 } );
+        for(var i=0; i<N; i++){
+            var cubeMesh = new THREE.Mesh(cubeGeo, cubeMaterial);
+            cubeMesh.castShadow = true;
+            meshes.push(cubeMesh);
+            scene.add(cubeMesh);
+        }
+
+        // 渲染器
+        renderer = new THREE.WebGLRenderer( { antialias: true } );
+        renderer.setSize( window.innerWidth, window.innerHeight );
+        renderer.setClearColor( scene.fog.color );
+
+        container.appendChild( renderer.domElement );
+
+        renderer.gammaInput = true;
+        renderer.gammaOutput = true;
+        renderer.shadowMapEnabled = true;
+
+        // 监听器
+        window.addEventListener( 'resize', onWindowResize, false );
+
+        window.addEventListener("mousemove", onMouseMove, false );
+        window.addEventListener("mousedown", onMouseDown, false );
+        window.addEventListener("mouseup", onMouseUp, false );
+    }
+
+    /**
+     * onWindowResize函数 begin
+     */
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        //controls.handleResize();
+        renderer.setSize( window.innerWidth, window.innerHeight );
+    }
+    /**
+     * onWindowResize函数 end
+      */
+
+    /**
+     * onMouseMove函数 begin
+     */
+    function onMouseMove(e){
+        // 移动 和 关于地面的计划任务
+        if (gplane && mouseConstraint) {
+            var pos = projectOntoPlane(e.clientX,e.clientY,gplane,camera);
+            if(pos){
+                setClickMarker(pos.x,pos.y,pos.z,scene);
+                moveJointToPoint(pos.x,pos.y,pos.z);
+            }
+        }
+    }
+
+
+    var lastx,lasty,last;
+    function projectOntoPlane(screenX,screenY,thePlane,camera) {
+        var x = screenX;
+        var y = screenY;
+        var now = new Date().getTime();
+        // 鼠标作用于地面时
+        var hit = findNearestIntersectingObject(screenX,screenY,camera,[thePlane]);
+        lastx = x;
+        lasty = y;
+        last = now;
+        if(hit)
+            return hit.point;
+        return false;
+    }
+
+    function findNearestIntersectingObject(clientX,clientY,camera,objects) {
+        // 从点上得到采集线
+        var raycaster = getRayCasterFromScreenCoord(clientX, clientY, camera, projector);
+
+        // 找到最近的相交对象
+        // 投射光线到场景中所有已经渲染的物体上,如果发射碰撞(物体在光线路径上),选取最近的一个
+        var hits = raycaster.intersectObjects(objects);
+        var closest = false;
+        if (hits.length > 0) {
+            closest = hits[0];
+        }
+
+        return closest;
+    }
+
+    // 返回用来在给定屏幕,给定相机,给定投影仪的场景找到相交物体的光线投射器
+    function getRayCasterFromScreenCoord (screenX, screenY, camera, projector) {
+        var mouse3D = new THREE.Vector3();
+        // 从给定的client x y获取3D坐标
+        mouse3D.x = (screenX / window.innerWidth) * 2 - 1;
+        mouse3D.y = -(screenY / window.innerHeight) * 2 + 1;
+        mouse3D.z = 0.5;
+        return projector.pickingRay(mouse3D, camera);
+    }
+
+    function setClickMarker(x,y,z) {
+        if(!clickMarker){
+            var shape = new THREE.SphereGeometry(0.2, 8, 8);
+            clickMarker = new THREE.Mesh(shape, markerMaterial);
+            scene.add(clickMarker);
+        }
+        clickMarker.visible = true;
+        clickMarker.position.set(x,y,z);
+    }
+
+    // 在空间中移动透明的联合体的函数
+    function moveJointToPoint(x,y,z) {
+        // 将联合体移动到新位置
+        jointBody.position.set(x,y,z);
+        mouseConstraint.update();
+    }
+    /**
+     * onMouseMove函数 end
+     */
+
+    /**
+     * onMouseDown函数 begin
+     */
+    function onMouseDown(e){
+        // 用光线发现物体
+        var entity = findNearestIntersectingObject(e.clientX,e.clientY,camera,meshes);
+        var pos = entity.point;
+        if(pos && entity.object.geometry instanceof THREE.BoxGeometry){
+            constraintDown = true;
+            // 在连接点做标记
+            setClickMarker(pos.x,pos.y,pos.z,scene); // onMouseMove段中已经定义
+
+            // 设置地面的移动
+            setScreenPerpCenter(pos,camera);
+
+            var idx = meshes.indexOf(entity.object);
+            if(idx !== -1){
+                addMouseConstraint(pos.x,pos.y,pos.z,bodies[idx]);
+            }
+        }
+    }
+
+    // 本函数创建一个虚拟的地面移动,以便鼠标结合体进入
+    function setScreenPerpCenter(point, camera) {
+        // 不存在就新建一个
+        if(!gplane) {
+            var planeGeo = new THREE.PlaneGeometry(100,100);
+            var plane = gplane = new THREE.Mesh(planeGeo,material);
+            plane.visible = false;
+            scene.add(gplane);
+        }
+
+        // 鼠标位置中心点
+        gplane.position.copy(point);
+
+        // 朝向摄像机
+        gplane.quaternion.copy(camera.quaternion);
+    }
+
+    function addMouseConstraint(x,y,z,body) {
+        // cannon body受鼠标约束
+        constrainedBody = body;
+
+        // 点击点的向量(坐标),和body相关
+        var v1 = new CANNON.Vec3(x,y,z).vsub(constrainedBody.position);
+
+        // 应用反数向量转换成body的局部坐标系统
+        var antiRot = constrainedBody.quaternion.inverse();
+        pivot = antiRot.vmult(v1); // pivot is not in local body coordinates
+
+        // 移动cannon click marker到鼠标点击点
+        jointBody.position.set(x,y,z);
+
+        // 创建一个新的约束
+        // 组合体的枢轴为0
+        mouseConstraint = new CANNON.PointToPointConstraint(constrainedBody, pivot, jointBody, new CANNON.Vec3(0,0,0));
+
+        // 在物理世界添加约束
+        world.addConstraint(mouseConstraint);
+    }
+    /**
+     * onMouseDown函数 end
+     */
+
+    /**
+     * onMouseUp函数 begin
+     */
+    function onMouseUp(e) {
+        constraintDown = false;
+        // 移除标记(鼠标点击点)
+        removeClickMarker();
+
+        // 向server发送移除鼠标约束
+        removeJointConstraint();
+    }
+
+    function removeClickMarker(){
+        clickMarker.visible = false;
+    }
+
+    function removeJointConstraint(){
+        // 从物理世界移除约束
+        world.removeConstraint(mouseConstraint);
+        mouseConstraint = false;
+    }
+    /**
+     * onMouseUp函数 end
+     */
+
+    function animate() {
+        requestAnimationFrame( animate );
+        //controls.update();
+        updatePhysics();
+        render();
+    }
+
+    function updatePhysics(){
+        world.step(dt);
+        for(var i=0; i !== meshes.length; i++){
+            meshes[i].position.copy(bodies[i].position);
+            meshes[i].quaternion.copy(bodies[i].quaternion);
+        }
+    }
+
+    function render() {
+        renderer.render(scene, camera);
+    }
+</script>
+
+</body>
+</html>
