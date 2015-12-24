@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>cannon.js - 选择性碰撞</title>
+
+    <script src="../cannon.js/libs/Three.js"></script>
+    <script src="../cannon.js/libs/cannon.js"></script>
+    <script src="js/cannon.demo.js"></script>
+    <script src="../cannon.js/libs/dat.gui.js"></script>
+    <script src="../cannon.js/libs/TrackballControls.js"></script>
+    <script src="../cannon.js/libs/Detector.js"></script>
+    <script src="../cannon.js/libs/Stats.js"></script>
+    <script src="../cannon.js/libs/smoothie.js"></script>
+</head>
+<body>
+
+<script>
+    /**
+     * 展示如何使用Body.collisionFilterGroup和Body.collisionFilterMask来做到有选择的产生碰撞
+     * 选择器在碰撞检测内部有效. 判断两个body能否发生碰撞的依据.
+     *
+     * 仅如下情况碰撞有效
+     *   (bodyA.collisionFilterGroup & bodyB.collisionFilterMask) && (bodyB.collisionFilterGroup & bodyA.collisionFilterMask)
+     */
+    var demo = new CANNON.Demo();
+
+    var size = 1;
+    var mass = 1;
+
+    // 碰撞选择器组 - 只有2的幂的组能产生碰撞!
+    var GROUP1 = 1;
+    var GROUP2 = 2;
+    var GROUP3 = 4;
+
+    demo.addScene("选择性碰撞", function () {
+        var world = demo.getWorld();
+        world.gravity.set(0,0,0); // no gravity
+        world.broadphase = new CANNON.NaiveBroadphase();
+        world.solver.iterations = 5;
+
+        // 球体
+        var sphereShape = new CANNON.Sphere(size);
+        var sphereBody = new CANNON.Body({
+            mass: mass,
+            position: new CANNON.Vec3(5,0,0),
+            velocity: new CANNON.Vec3(-5,0,0),
+            collisionFilterGroup: GROUP1, // 设置球体为组1
+            collisionFilterMask: GROUP2 | GROUP3, // 可以和组2或组3碰撞
+            shape: sphereShape
+        });
+
+        // 盒子
+        var boxBody = new CANNON.Body({
+            mass: mass,
+            shape: new CANNON.Box(new CANNON.Vec3(size,size,size)),
+            collisionFilterGroup: GROUP2, // 设置盒子为组2
+            collisionFilterMask:  GROUP1 // 只能和组1(球体碰撞)
+        });
+
+        // 圆柱体
+        var cylinderShape = new CANNON.Cylinder(size,size,size*2.2,10);
+        var cylinderBody = new CANNON.Body({
+            mass: mass,
+            shape: cylinderShape,
+            position: new CANNON.Vec3(-5,0,0),
+            collisionFilterGroup: GROUP3, // 设置圆柱体为组3
+            collisionFilterMask:  GROUP1 // 只能和组1(球体碰撞)
+        });
+
+        world.addBody(sphereBody);
+        world.addBody(boxBody);
+        world.addBody(cylinderBody);
+        demo.addVisual(sphereBody);
+        demo.addVisual(boxBody);
+        demo.addVisual(cylinderBody);
+    });
+
+    demo.start();
+</script>
+
+</body>
+</html>
