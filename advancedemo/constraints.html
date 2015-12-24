@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>cannon.js - 约束</title>
+
+    <script src="../cannon.js/libs/Three.js"></script>
+    <script src="../cannon.js/libs/cannon.js"></script>
+    <script src="js/cannon.demo.js"></script>
+    <script src="../cannon.js/libs/dat.gui.js"></script>
+    <script src="../cannon.js/libs/TrackballControls.js"></script>
+    <script src="../cannon.js/libs/Detector.js"></script>
+    <script src="../cannon.js/libs/Stats.js"></script>
+    <script src="../cannon.js/libs/smoothie.js"></script>
+</head>
+<body>
+
+<script>
+    /**
+     * 在这个demo中,演示一些约束类型
+     * 约束移除body的自由度并迫使他们按照约定的方法移动
+     */
+
+    var demo = new CANNON.Demo();
+
+    demo.addScene("锁桥", function () {
+        // 使用Lock约束
+        var world = setupWorld(demo);
+        world.solver.iterations = 20;
+        world.gravity.set(0,0,-10);
+        var size = 0.5;
+        var boxShape = new CANNON.Box(new CANNON.Vec3(size,size,size));
+        var mass = 1;
+        var space = 0.1*size;
+
+        var N=10, last;
+        for(var i=0; i<N; i++){
+            // 在物理世界创建盒子
+            var boxbody = new CANNON.Body({
+                mass: mass,
+                shape: boxShape,
+                position: new CANNON.Vec3((N-i-N/2)*(size*2+2*space), 0, size*6+space)
+            });
+            world.addBody(boxbody);
+            demo.addVisual(boxbody);
+
+            if(last){
+                // 将最后一个盒子和上一个相连
+                var c = new CANNON.LockConstraint(boxbody, last);
+                world.addConstraint(c);
+            }
+
+            // 当前盒子标记为last
+            last = boxbody;
+        }
+
+        // 创建桥墩
+        var bodyA = new CANNON.Body({
+            mass: 0,
+            shape: boxShape,
+            position: new CANNON.Vec3((-N/2+1)*(size*2+2*space), 0, size*3)
+        });
+        world.addBody(bodyA);
+        demo.addVisual(bodyA);
+
+        var bodyB = new CANNON.Body({
+            mass: 0,
+            shape: boxShape,
+            position: new CANNON.Vec3((N/2)*(size*2+2*space), 0, size*3)
+        });
+        world.addBody(bodyB);
+        demo.addVisual(bodyB);
+    });
+
+    demo.addScene("链子",function(){
+        // 使用PointToPoint约束
+        var world = setupWorld(demo);
+        world.gravity.set(0,-1,-20);
+        var size = 1;
+        var boxShape = new CANNON.Box(new CANNON.Vec3(size,size*0.1,size));
+        var mass = 0;
+        var space = 0.1*size;
+
+        var N=10, last;
+        for (var i = 0; i < N; i++) {
+            // Create a box
+            var boxbody = new CANNON.Body({ mass: mass });
+            boxbody.addShape(boxShape);
+            boxbody.position.set(0,0,(N-i)*(size*2+2*space) + size*2+space);
+            boxbody.linearDamping=0.01; // 使摆动随时间减弱
+            boxbody.angularDamping=0.01;
+            world.addBody(boxbody);
+            demo.addVisual(boxbody);
+
+            if (i!=0) {
+                // 将此盒子和上一个相连
+                // 将盒子的两个角分别相连,等同于边相连
+                var c1 = new CANNON.PointToPointConstraint(boxbody,new CANNON.Vec3(-size,0,size+space),last,new CANNON.Vec3(-size,0,-size-space));
+                var c2 = new CANNON.PointToPointConstraint(boxbody,new CANNON.Vec3(size,0,size+space),last,new CANNON.Vec3(size,0,-size-space));
+                world.addConstraint(c1);
+                world.addConstraint(c2);
+            } else {
+                // 第一个盒子无质量(不受重力)
+                mass=0.3;
+            }
+
+            // 当前盒子标记为last
+            last = boxbody;
+        }
+    });
+
+    demo.addScene("球摆",function(){
+        var world = setupWorld(demo);
+        var size = 1;
+        var sphereShape = new CANNON.Sphere(size);
+        var mass = 1;
+
+        var spherebody = new CANNON.Body({ mass: mass });
+        spherebody.addShape(sphereShape);
+        spherebody.position.set(0,0,size*3);
+        spherebody.velocity.set(5,0,0);
+        spherebody.linearDamping=0;
+        spherebody.angularDamping=0;
+        world.addBody(spherebody);
+        demo.addVisual(spherebody);
+
+        var spherebody2 = new CANNON.Body({ mass: 0 });
+        spherebody2.addShape(sphereShape);
+        spherebody2.position.set(0,0,size*7);
+        world.addBody(spherebody2);
+        demo.addVisual(spherebody2);
+
+        // 两个球添加点对点约束
+        var c = new CANNON.PointToPointConstraint(spherebody,new CANNON.Vec3(0,0,size*2),spherebody2,new CANNON.Vec3(0,0,-size*2));
+        world.addConstraint(c);
+    });
+
+    demo.addScene("球链",function(){
+        var size = 0.5;
+        var dist = size*2+0.12;
+        var world = setupWorld(demo);
+        //world.solver.setSpookParams(1e20,3);
+        var sphereShape = new CANNON.Sphere(size);
+        var mass = 1;
+        var lastBody = null;
+        var N = 20;
+        world.solver.iterations = N; // 为了计算N个球组成的链的运动,迭代次数至少为N
+        for(var i=0; i<N; i++){
+            var spherebody = new CANNON.Body({ mass: i===0 ? 0 : mass });
+            spherebody.addShape(sphereShape);
+            spherebody.position.set(0,0,(N-i)*dist);
+            spherebody.velocity.x = i;
+            world.addBody(spherebody);
+            demo.addVisual(spherebody);
+
+            // 将此球和上一个相连
+            var c;
+            if(lastBody!==null){
+                world.addConstraint(c = new CANNON.DistanceConstraint(spherebody,lastBody,dist));
+            }
+
+            // 当前球标记为last
+            lastBody = spherebody;
+        }
+    });
+
+    demo.addScene("粒子布料",function(){
+        var world = setupWorld(demo);
+        world.solver.iterations = 18;
+        var dist = 0.2;
+        var mass = 0.5;
+        var Nrows = 15, Ncols = 15;
+        var bodies = {}; // bodies["i j"] => particle
+        for(var i=0; i<Ncols; i++){
+            for(var j=0; j<Nrows; j++){
+                var body = new CANNON.Body({ mass: j==Nrows-1 ? 0 : mass });
+                body.addShape(new CANNON.Particle());
+                body.position.set(i*dist,0,j*dist+5);
+                body.velocity.set(0, 3*(Math.sin(i*0.1)+Math.sin(j*0.1)),0);
+                bodies[i+" "+j] = body;
+                world.addBody(body);
+                demo.addVisual(body);
+            }
+        }
+        function connect(i1,j1,i2,j2){
+            world.addConstraint(new CANNON.DistanceConstraint(bodies[i1+" "+j1],bodies[i2+" "+j2],dist));
+        }
+        for(var i=0; i<Ncols; i++){
+            for(var j=0; j<Nrows; j++){
+                if(i<Ncols-1) connect(i,j,i+1,j);
+                if(j<Nrows-1) connect(i,j,i,j+1);
+            }
+        }
+    });
+
+        demo.addScene("球面上的布料",function(){
+        var world = setupWorld(demo);
+        world.solver.iterations = 10;
+
+        var dist = 0.2;
+        var mass = 0.5;
+        var Nrows = 15, Ncols = 15;
+        var bodies = {}; // bodies["i j"] => particle
+        for(var i=0; i<Ncols; i++){
+            for(var j=0; j<Nrows; j++){
+                var body = new CANNON.Body({ mass: mass });
+                body.addShape(new CANNON.Particle());
+                body.position.set((i-Ncols*0.5)*dist,(j-Nrows*0.5)*dist,5);
+                bodies[i+" "+j] = body;
+                world.addBody(body);
+                demo.addVisual(body);
+            }
+        }
+
+        function connect(i1,j1,i2,j2){
+            world.addConstraint(new CANNON.DistanceConstraint(bodies[i1+" "+j1],bodies[i2+" "+j2],dist));
+        }
+
+        for(var i=0; i<Ncols; i++){
+            for(var j=0; j<Nrows; j++){
+                if(i<Ncols-1) connect(i,j,i+1,j);
+                if(j<Nrows-1) connect(i,j,i,j+1);
+            }
+        }
+
+        var sphere = new CANNON.Sphere(1.5);
+        var body = new CANNON.Body({ mass: 0 });
+        body.addShape(sphere);
+        body.position.set(0,0,3.5);
+        world.addBody(body);
+        demo.addVisual(body);
+    });
+
+
+    function setupWorld(demo){
+        // 创建物理时间
+        var world = demo.getWorld();
+        world.gravity.set(0,0,-40);
+        world.broadphase = new CANNON.NaiveBroadphase();
+        world.solver.iterations = 10;
+
+        // 地面
+        var groundShape = new CANNON.Plane();
+        var groundBody = new CANNON.Body({ mass: 0 });
+        groundBody.addShape(groundShape);
+        groundBody.position.set(0,0,1);
+        world.addBody(groundBody);
+        demo.addVisual(groundBody);
+
+        world.quatNormalizeFast = false;
+        world.quatNormalizeSkip = 0;
+
+        return world;
+    }
+
+    demo.start();
+</script>
+
+</body>
+</html>
