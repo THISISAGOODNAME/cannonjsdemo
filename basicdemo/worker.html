@@ -146,7 +146,7 @@
         worker.postMessage({
             N: N,
             dt: dt,
-            cannonUrl: document.location.href.replace(/\/[^/]*$/,"/") + "../cannon.js/libs/cannon.min.js",
+            cannonUrl: document.location.href.replace(/\/[^/]*$/,"/") + "../cannon.js/libs/cannon.js",
             positions: positions,
             quaternions: quaternions
         }, [positions.buffer, quaternions.buffer]);

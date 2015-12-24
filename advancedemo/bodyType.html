@@ -15,5 +15,77 @@
 </head>
 <body>
 
+<script>
+    var demo = new CANNON.Demo();
+    var size = 2;
+
+    demo.addScene("一直运动的盒子", function() {
+        var world = setupWorld(demo);
+
+        var boxShape = new CANNON.Box(new CANNON.Vec3(size, size, size));
+        var sphereShape = new CANNON.Sphere(size);
+
+        var sphereMass = 5, boxMass = 0; // 质量为0的物体不受重力影响
+
+        // 弹性盒子
+        // 可以与body相互作用,但是不会受任何力影响(没有质量)
+        // 运动可以控制他的加速度
+        var b1 = new CANNON.Body({
+            mass: boxMass,
+            type: CANNON.Body.KINEMATIC,
+            position: new CANNON.Vec3(0, 0, 0.5*size)
+        });
+        b1.addShape(boxShape);
+        world.addBody(b1);
+        demo.addVisual(b1);
+
+        // 通过设置盒子的加速度的方法来控制盒子的运动
+        b1.velocity.set(0, 0, 5);
+        setInterval(function(){
+            if (b1.velocity.z<0) {
+                b1.velocity.set(0, 0, 5);
+            } else {
+                b1.velocity.set(0, 0, -5);
+            }
+        }, 1000);
+
+        // 动力学小球
+        // 动力学body可以与其他任何类型的body发生碰撞
+        // addVisual方法生成的几何体是由cannon body网格生成,所以球不会有three.js那么圆(没有平滑)
+        var b2 = new CANNON.Body({
+            mass: sphereMass,
+            position: new CANNON.Vec3(0, 0, 3*size)
+        });
+        b2.addShape(sphereShape);
+        world.addBody(b2);
+        demo.addVisual(b2);
+    });
+
+    demo.start();
+
+    function setupWorld(demo){
+        var world = demo.getWorld();
+        world.gravity.set(0,0,-40);
+        world.broadphase = new CANNON.NaiveBroadphase();
+        world.solver.iterations = 10;
+
+        world.defaultContactMaterial.contactEquationStiffness = 1e8;
+        world.defaultContactMaterial.contactEquationRelaxation = 10;
+
+        // 静态地面
+        // 静态body 之和动态body作用. 但加速度永远为0.
+        var groundShape = new CANNON.Plane();
+        var mass = 0; // mass=0 能自动产生一个静态body
+        var groundBody = new CANNON.Body({
+            mass: mass
+        });
+        groundBody.addShape(groundShape);
+        world.addBody(groundBody);
+        demo.addVisual(groundBody);
+
+        return world;
+    }
+</script>
+
 </body>
 </html>
