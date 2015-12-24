@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>cannon.js - 事件,具体见控制台</title>
+
+    <script src="../cannon.js/libs/Three.js"></script>
+    <script src="../cannon.js/libs/cannon.js"></script>
+    <script src="js/cannon.demo.js"></script>
+    <script src="../cannon.js/libs/dat.gui.js"></script>
+    <script src="../cannon.js/libs/TrackballControls.js"></script>
+    <script src="../cannon.js/libs/Detector.js"></script>
+    <script src="../cannon.js/libs/Stats.js"></script>
+    <script src="../cannon.js/libs/smoothie.js"></script>
+</head>
+<body>
+
+<script>
+    var demo = new CANNON.Demo();
+
+    demo.addScene("'碰撞'事件",function(){
+        // 物理世界
+        var world = demo.getWorld();
+
+        world.defaultContactMaterial.contactEquationStiffness = 5e7;
+        world.defaultContactMaterial.contactEquationRelaxation = 4;
+
+        world.gravity.set(0,0,-20);
+
+        // 地面
+        var groundShape = new CANNON.Plane();
+        var groundBody = new CANNON.Body({ mass: 0 });
+        groundBody.addShape(groundShape);
+        world.addBody(groundBody);
+        demo.addVisual(groundBody);
+
+        // 球
+        var size = 1;
+        var sphere = new CANNON.Sphere(size);
+        var sphereBody = new CANNON.Body({ mass: 30 });
+        sphereBody.addShape(sphere);
+        sphereBody.position.set(0,0,size*6);
+        world.addBody(sphereBody);
+        demo.addVisual(sphereBody);
+
+        // 两个物体发生碰撞时,都会发出碰撞事件
+        sphereBody.addEventListener("collide",function(e){
+            console.log("The sphere just collided with the ground!");
+            console.log("Collided with body:",e.body);
+            console.log("Contact between bodies:",e.contact);
+        });
+
+    });
+
+    demo.start();
+</script>
+
+</body>
+</html>
