@@ -495,7 +495,7 @@ CANNON.Demo = function(options){
         info.style.top = '10px';
         info.style.width = '100%';
         info.style.textAlign = 'center';
-        info.innerHTML = '<a href="http://github.com/schteppe/cannon.js">cannon.js</a> - javascript 3d physics';
+        info.innerHTML = '<a href="https://github.com/THISISAGOODNAME/cannon.js">cannon.js</a> - javascript 3d physics';
         container.appendChild( info );
 
         document.addEventListener('mousemove',onDocumentMouseMove);
