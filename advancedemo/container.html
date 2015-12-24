@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>cannon.js - 无形容器</title>
+
+    <script src="../cannon.js/libs/Three.js"></script>
+    <script src="../cannon.js/libs/cannon.js"></script>
+    <script src="js/cannon.demo.js"></script>
+    <script src="../cannon.js/libs/dat.gui.js"></script>
+    <script src="../cannon.js/libs/TrackballControls.js"></script>
+    <script src="../cannon.js/libs/Detector.js"></script>
+    <script src="../cannon.js/libs/Stats.js"></script>
+    <script src="../cannon.js/libs/smoothie.js"></script>
+</head>
+<body>
+
+<script>
+    /**
+     * 容器只在物理空间存在,在渲染场景中不出现
+     */
+
+    var demo = new CANNON.Demo();
+    var nx=4, ny=4;
+
+    demo.addScene((nx*ny*4)+ " 个球", function(){   createContainer(demo,nx,ny,4);    });
+    demo.addScene((nx*ny*8)+ " 个球", function(){   createContainer(demo,nx,ny,8);    });
+    demo.addScene((nx*ny*15)+" 个球", function(){   createContainer(demo,nx,ny,15);   });
+    demo.addScene((nx*ny*20)+" 个球", function(){   createContainer(demo,nx,ny,20);   });
+    demo.addScene((nx*ny*25)+" 个球", function(){   createContainer(demo,nx,ny,25);   });
+    demo.addScene((nx*ny*30)+" 个球", function(){   createContainer(demo,nx,ny,30);   });
+
+    demo.start();
+
+    function createContainer(demo,nx,ny,nz){
+
+        // 创建物理场景
+        var world = demo.getWorld();
+        world.broadphase = new CANNON.SAPBroadphase(world);
+
+        // 调整接触属性
+        world.defaultContactMaterial.contactEquationStiffness = 1e11; // 碰撞僵直 - 调整碰撞的强度
+        world.defaultContactMaterial.contactEquationRelaxation = 2; // 稳定时间,单位为时间步长
+
+        // 最大求解器迭代次数: 次数越多,力模拟效果越好,但性能会下降
+        world.solver.iterations = 10;
+
+        world.gravity.set(0,0,-30);
+
+        // 由于很多body并不经常移动, 可以较少的进行四元数归一化
+        world.quatNormalizeFast = true;
+        world.quatNormalizeSkip = 8; // 可以不美不都进行规范化
+
+        // 材质
+        var stone = new CANNON.Material('stone');
+        var stone_stone = new CANNON.ContactMaterial(stone, stone, {
+            friction: 0.3,
+            restitution: 0.2
+        });
+        world.addContactMaterial(stone_stone);
+
+        // 地面
+        var groundShape = new CANNON.Plane();
+        var groundBody = new CANNON.Body({ mass: 0, material: stone });
+        groundBody.addShape(groundShape);
+        world.addBody(groundBody);
+        demo.addVisual(groundBody);
+
+        // -x墙体
+        var planeShapeXmin = new CANNON.Plane();
+        var planeXmin = new CANNON.Body({ mass: 0, material: stone });
+        planeXmin.addShape(planeShapeXmin);
+        planeXmin.quaternion.setFromAxisAngle(new CANNON.Vec3(0,1,0),Math.PI/2);
+        planeXmin.position.set(-5,0,0);
+        world.addBody(planeXmin);
+
+        // +x墙体
+        var planeShapeXmax = new CANNON.Plane();
+        var planeXmax = new CANNON.Body({ mass: 0, material: stone });
+        planeXmax.addShape(planeShapeXmax);
+        planeXmax.quaternion.setFromAxisAngle(new CANNON.Vec3(0,1,0),-Math.PI/2);
+        planeXmax.position.set(5,0,0);
+        world.addBody(planeXmax);
+
+        // -y墙体
+        var planeShapeYmin = new CANNON.Plane();
+        var planeYmin = new CANNON.Body({ mass: 0, material: stone });
+        planeYmin.addShape(planeShapeYmin);
+        planeYmin.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0),-Math.PI/2);
+        planeYmin.position.set(0,-5,0);
+        world.addBody(planeYmin);
+
+        // +y墙体
+        var planeShapeYmax = new CANNON.Plane();
+        var planeYmax = new CANNON.Body({ mass: 0,  material: stone });
+        planeYmax.addShape(planeShapeYmax);
+        planeYmax.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0),Math.PI/2);
+        planeYmax.position.set(0,5,0);
+        world.addBody(planeYmax);
+
+        // Create spheres
+        var rand = 0.1;
+        var h = 0;
+        var sphereShape = new CANNON.Sphere(1); // Sharing shape saves memory
+        world.allowSleep = true;
+        for(var i=0; i<nx; i++){
+            for(var j=0; j<ny; j++){
+                for(var k=0; k<nz; k++){
+                    var sphereBody = new CANNON.Body({ mass: 5, material: stone });
+                    sphereBody.addShape(sphereShape);
+                    sphereBody.position.set(
+                            i*2-nx*0.5 + (Math.random()-0.5)*rand,
+                            j*2-ny*0.5 + (Math.random()-0.5)*rand,
+                            1+k*2.1+h+(i+j)*0.0
+                    );
+                    sphereBody.allowSleep = true;
+                    sphereBody.sleepSpeedLimit = 1;
+                    sphereBody.sleepTimeLimit = 5;
+
+                    world.addBody(sphereBody);
+                    demo.addVisual(sphereBody);
+                }
+            }
+        }
+    }
+</script>
+
+</body>
+</html>
