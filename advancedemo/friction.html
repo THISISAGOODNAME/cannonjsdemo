@@ -19,7 +19,68 @@
     var demo = new CANNON.Demo();
 
     demo.addScene("摩擦力", function () {
+        var size = 1;
+        var shape = new CANNON.Box(new CANNON.Vec3(size, size, size));
 
+        // 创建物理事件
+        var world = demo.getWorld();
+        world.broadphase = new CANNON.NaiveBroadphase();
+        world.iterations = 10;
+
+        // 创建材质
+        var groundMaterial = new CANNON.Material("groundMaterial");
+
+        // 修改地面表面材质
+        var ground_ground_cm = new CANNON.ContactMaterial(groundMaterial, groundMaterial, {
+            friction: 0.4,
+            restitution: 0.3,
+            contactEquationStiffness: 1e8,
+            contactEquationRelaxation: 3,
+            frictionEquationStiffness: 1e8,
+            frictionEquationRegularizationTime: 3,
+        });
+
+        // 把接触材质添加到物理场景
+        world.addContactMaterial(ground_ground_cm);
+
+        // 地面
+        var groundShape = new CANNON.Plane();
+        var groundBody = new CANNON.Body({mass: 0, material: groundMaterial});
+        groundBody.addShape(groundShape);
+        world.addBody(groundBody);
+        demo.addVisual(groundBody);
+
+        // 创建绝对光滑表面(摩擦因数 = 0.0)
+        var slipperyMaterial = new CANNON.Material("slipperyMaterial");
+
+        // 接触材质定义了两种材质接触时的情况
+        // 当光滑材质接触地面时摩擦因数为0
+        var slippery_ground_cm = new CANNON.ContactMaterial(groundMaterial, slipperyMaterial, {
+            friction: 0,
+            restitution: 0.3,
+            contactEquationStiffness: 1e8,
+            contactEquationRelaxation: 3
+        });
+
+        // 添加到物理场景
+        world.addContactMaterial(slippery_ground_cm);
+
+        // 光滑表面的盒子
+        var boxBody = new CANNON.Body({mass: 1, material: slipperyMaterial});
+        boxBody.addShape(shape);
+        boxBody.position.set(0, 0, 5);
+        world.addBody(boxBody);
+        demo.addVisual(boxBody);
+
+        // 和地面相同摩擦程度的盒子
+        var boxBody2 = new CANNON.Body({mass: 10, material: groundMaterial});
+        boxBody2.addShape(shape);
+        boxBody2.position.set(size * 4, 0, 5);
+        world.addBody(boxBody2);
+        demo.addVisual(boxBody2);
+
+        // 添加x方向的引力所以盒子会沿着x轴方向移动
+        world.gravity.set(-3, 0 ,-20);
     });
 
     demo.start();
