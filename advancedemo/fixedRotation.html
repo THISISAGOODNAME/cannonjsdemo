@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>cannon.js - 禁止转动</title>
+
+    <script src="../cannon.js/libs/Three.js"></script>
+    <script src="../cannon.js/libs/cannon.js"></script>
+    <script src="js/cannon.demo.js"></script>
+    <script src="../cannon.js/libs/dat.gui.js"></script>
+    <script src="../cannon.js/libs/TrackballControls.js"></script>
+    <script src="../cannon.js/libs/Detector.js"></script>
+    <script src="../cannon.js/libs/Stats.js"></script>
+    <script src="../cannon.js/libs/smoothie.js"></script>
+</head>
+<body>
+
+<script>
+    var demo = new CANNON.Demo();
+
+    demo.addScene("禁止转动", function () {
+        // 创建物理世界
+        var world = demo.getWorld();
+        world.broadphase = new CANNON.NaiveBroadphase();
+
+        var size = 1.0;
+
+        // 地面
+        var groundShape = new CANNON.Plane();
+        var groundBody = new CANNON.Body({ mass: 0 });
+        groundBody.addShape(groundShape);
+        world.addBody(groundBody);
+        demo.addVisual(groundBody);
+
+        // 创建一个禁止转动的盒子
+        var shape = new CANNON.Box(new CANNON.Vec3(size,size,size));
+        var boxBody = new CANNON.Body({ mass: 1 });
+        boxBody.addShape(shape);
+        boxBody.position.set(0,0,size);
+        boxBody.fixedRotation = true;
+        boxBody.updateMassProperties();
+        world.addBody(boxBody);
+        demo.addVisual(boxBody);
+
+        // 创建另一个禁止转动的盒子
+        var shape2 = new CANNON.Box(new CANNON.Vec3(size, size, size));
+        var boxBody2 = new CANNON.Body({ mass: 1, });
+        boxBody2.addShape(shape2);
+        boxBody2.position.set(size*3/2, 0, size*4);
+        boxBody2.fixedRotation = true;
+        boxBody2.updateMassProperties();
+        world.addBody(boxBody2);
+        demo.addVisual(boxBody2);
+
+        // 改变重力使盒子沿着x轴排列
+        world.gravity.set(0, 0, -10);
+    });
+
+    demo.start();
+</script>
+
+</body>
+</html>
