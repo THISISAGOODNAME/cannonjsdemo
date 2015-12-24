@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>cannon.js - 回调demo</title>
+
+    <script src="../cannon.js/libs/Three.js"></script>
+    <script src="../cannon.js/libs/cannon.js"></script>
+    <script src="js/cannon.demo.js"></script>
+    <script src="../cannon.js/libs/dat.gui.js"></script>
+    <script src="../cannon.js/libs/TrackballControls.js"></script>
+    <script src="../cannon.js/libs/Detector.js"></script>
+    <script src="../cannon.js/libs/Stats.js"></script>
+    <script src="../cannon.js/libs/smoothie.js"></script>
+</head>
+<body>
+
+<script>
+    /**
+     * 展示如何使用preStep回调来给body添加力.
+     * 和引力场表现类似.
+     */
+    var demo = new CANNON.Demo();
+
+    demo.addScene("地月模型", function () {
+        var world = demo.getWorld();
+
+        var mass = 5;
+        var moonShape = new CANNON.Sphere(0.5);
+        var planetShape = new CANNON.Sphere(3.5);
+        var moon = new CANNON.Body({
+            mass: mass,
+            position: new CANNON.Vec3(5,0,0)
+        });
+        moon.addShape(moonShape);
+        var planet = new CANNON.Body({ mass: 0 });
+        planet.addShape(planetShape);
+
+        moon.velocity.set(0,0,8);
+        moon.linearDamping = 0.0;
+
+        // 使用preStep回调来给moon施加重力
+        // 每个时间步长调用一次
+        moon.preStep = function() {
+            // 获取从月亮中心指向地球中心的向量
+            var moon_to_planet = new CANNON.Vec3();
+            this.position.negate(moon_to_planet);
+
+            //获取地月距离
+            var distance = moon_to_planet.norm();
+
+            // 更新力
+            // 力的方向为 月球中心->地球中心
+            moon_to_planet.normalize();
+            moon_to_planet.mult(1500/Math.pow(distance,2),this.force);
+        };
+
+        world.addBody(moon);
+        world.addBody(planet);
+
+        demo.addVisual(moon);
+        demo.addVisual(planet);
+    });
+
+    demo.start();
+</script>
+
+</body>
+</html>
