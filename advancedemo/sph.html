@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>cannon.js - SPH(光滑粒子流体动力学)</title>
+
+    <script src="../cannon.js/libs/Three.js"></script>
+    <script src="../cannon.js/libs/cannon.js"></script>
+    <script src="js/cannon.demo.js"></script>
+    <script src="../cannon.js/libs/dat.gui.js"></script>
+    <script src="../cannon.js/libs/TrackballControls.js"></script>
+    <script src="../cannon.js/libs/Detector.js"></script>
+    <script src="../cannon.js/libs/Stats.js"></script>
+    <script src="../cannon.js/libs/smoothie.js"></script>
+</head>
+<body>
+
+<script>
+    /**
+     * 流体模拟实质,大量粒子相互作用
+     * 顶层层的粒子组成包络面,再渲染包络面得到流体
+     * PS:包络面下方的物理粒子不一定要出现在渲染空间,只出现在物理世界即可(实际使用时)
+     */
+    var demo = new CANNON.Demo();
+    var nx=4, ny=4, nz=15, w=10, h=5, mass=0.01;
+    var walls = true;
+
+    demo.addScene( "粒子数量 " + (nx*ny*nz), function () {
+        // 物理世界
+        var world = demo.getWorld();
+        var sph = new CANNON.SPHSystem();
+        sph.density = 1;
+        sph.viscosity = 0.03;
+        sph.smoothingRadius = 1.0;
+        world.subsystems.push(sph);
+
+        // 调整接触属性
+        world.defaultContactMaterial.contactEquationStiffness = 1e11; // 接触硬直程度 - 控制接触的强度大小
+        world.defaultContactMaterial.contactEquationRelaxation = 2; // 僵直时间,单位为时间步长
+
+        // 迭代器迭代次数,越大模拟力的效果越好,但是性能下降
+        world.solver.iterations = 10;
+
+        world.gravity.set(0,0,-10);
+
+        // 材质
+        var material = new CANNON.Material();
+        var material_material = new CANNON.ContactMaterial(material, material, {
+            friction: 0.06,
+            restitution: 0.0
+        });
+        world.addContactMaterial(material_material);
+
+        // 地面
+        var groundShape = new CANNON.Plane();
+        var groundBody = new CANNON.Body({
+            mass: 0,
+            material: material
+        });
+        groundBody.addShape(groundShape);
+        world.addBody(groundBody);
+        demo.addVisual(groundBody);
+
+        if(walls){
+
+            // -x墙
+            var planeShapeXmin = new CANNON.Plane();
+            var planeXmin = new CANNON.Body({
+                mass: 0,
+                material: material
+            });
+            planeXmin.addShape(planeShapeXmin);
+            planeXmin.quaternion.setFromAxisAngle(new CANNON.Vec3(0,1,0),Math.PI/2);
+            planeXmin.position.set(-w*0.5,0,0);
+            world.addBody(planeXmin);
+
+            // +x墙
+            var planeShapeXmax = new CANNON.Plane();
+            var planeXmax = new CANNON.Body({ mass: 0, material: material });
+            planeXmax.addShape(planeShapeXmax);
+            planeXmax.quaternion.setFromAxisAngle(new CANNON.Vec3(0,1,0),-Math.PI/2);
+            planeXmax.position.set(w*0.5,0,0);
+            world.addBody(planeXmax);
+
+            // -y墙
+            var planeShapeYmin = new CANNON.Plane();
+            var planeYmin = new CANNON.Body({ mass: 0, material: material });
+            planeYmin.addShape(planeShapeYmin);
+            planeYmin.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0),-Math.PI/2);
+            planeYmin.position.set(0,-h*0.5,0);
+            world.addBody(planeYmin);
+
+            // +y墙
+            var planeShapeYmax = new CANNON.Plane();
+            var planeYmax = new CANNON.Body({ mass: 0, material: material });
+            planeYmax.addShape(planeShapeYmax);
+            planeYmax.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), Math.PI/2);
+            planeYmax.position.set(0,h*0.5,0);
+            world.addBody(planeYmax);
+        }
+
+        // 生成粒子
+        var rand = 0.1;
+        for(var i=0; i!==nx; i++){
+            for(var j=0; j!==ny; j++){
+                for(var k=0; k!==nz; k++){
+                    var particle = new CANNON.Body({
+                        mass: mass,
+                        material: material
+                    });
+                    particle.addShape(new CANNON.Particle());
+                    particle.position.set((i + (Math.random()-0.5)*rand + 0.5)*w/nx - w*0.5,
+                            (j + (Math.random()-0.5)*rand + 0.5)*h/ny - h*0.5,
+                            k*h/ny);
+                    world.addBody(particle);
+                    sph.add(particle);
+                    demo.addVisual(particle);
+                }
+            }
+        }
+    });
+
+    demo.start();
+</script>
+
+</body>
+</html>
