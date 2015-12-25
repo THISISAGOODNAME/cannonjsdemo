@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>cannon.js - 脉冲和力</title>
+
+    <script src="../cannon.js/libs/Three.js"></script>
+    <script src="../cannon.js/libs/cannon.js"></script>
+    <script src="js/cannon.demo.js"></script>
+    <script src="../cannon.js/libs/dat.gui.js"></script>
+    <script src="../cannon.js/libs/TrackballControls.js"></script>
+    <script src="../cannon.js/libs/Detector.js"></script>
+    <script src="../cannon.js/libs/Stats.js"></script>
+    <script src="../cannon.js/libs/smoothie.js"></script>
+</head>
+<body>
+
+<script>
+    /**
+     * 给body上的一点施加一个力或者一个脉冲
+     * 力改变 Body.force 和 Body.torque.
+     * 脉冲是在一个很短时间内给一个物体施加力 (impulse = force * time).
+     * 脉冲改变 Body.velocity 和 Body.angularVelocity.
+     */
+
+    var demo = new CANNON.Demo();
+
+    var radius=1, mass=2, f=500;
+    var dt=1/60, damping=0.5;
+
+    demo.addScene("在中心施加脉冲", function () {
+        var world = setupWorld(demo);
+        var shape = new CANNON.Sphere(radius);
+        var body = new CANNON.Body({
+            mass: mass,
+            position: new CANNON.Vec3(0,0,0)
+        });
+        body.addShape(shape);
+        body.linearDamping = body.angularDamping = damping;
+        world.addBody(body);
+        demo.addVisual(body);
+
+        // 在中心点施加脉冲
+        var worldPoint = new CANNON.Vec3(0, 0, 0);
+        var impulse = new CANNON.Vec3(f*dt, 0, 0);
+        body.applyImpulse(impulse, worldPoint);
+    });
+
+    demo.addScene("在顶端施加脉冲", function() {
+        var world = setupWorld(demo);
+        var shape = new CANNON.Sphere(radius);
+        var body = new CANNON.Body({
+            mass: mass,
+            position: new CANNON.Vec3(0,0,0)
+        });
+        body.addShape(shape);
+        body.linearDamping = body.angularDamping = damping;
+        world.addBody(body);
+        demo.addVisual(body);
+
+        // 在顶部施加脉冲
+        var worldPoint = new CANNON.Vec3(0,0,radius);
+        var impulse = new CANNON.Vec3(f*dt,0,0);
+        body.applyImpulse(impulse, worldPoint);
+    });
+
+    demo.addScene("在中心施加力",function(){
+        var world = setupWorld(demo);
+        var shape = new CANNON.Sphere(radius);
+        var body = new CANNON.Body({
+            mass: mass,
+            position: new CANNON.Vec3(0,0,0)
+        });
+        body.addShape(shape);
+        body.linearDamping = body.angularDamping = damping;
+        world.addBody(body);
+        demo.addVisual(body);
+
+        // 在中心点施加力
+        var worldPoint = new CANNON.Vec3(0,0,0);
+        var force = new CANNON.Vec3(f,0,0);
+        body.applyForce(force,worldPoint);
+    });
+
+    demo.addScene("在顶端施加力",function(){
+        var world = setupWorld(demo);
+        var shape = new CANNON.Sphere(radius);
+        var body = new CANNON.Body({
+            mass: mass,
+            position: new CANNON.Vec3(0,0,0)
+        });
+        body.addShape(shape);
+        body.linearDamping = body.angularDamping = damping;
+        world.addBody(body);
+        demo.addVisual(body);
+
+        // 在顶部施加力
+        var worldPoint = new CANNON.Vec3(0,0,radius);
+        var force = new CANNON.Vec3(f,0,0);
+        body.applyForce(force,worldPoint);
+    });
+
+    demo.start();
+
+    function setupWorld(demo){
+        var world = demo.getWorld();
+        world.broadphase = new CANNON.NaiveBroadphase();
+        return world;
+    }
+</script>
+
+</body>
+</html>
