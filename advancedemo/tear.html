@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>cannon.js - 撕裂</title>
+
+    <script src="../cannon.js/libs/Three.js"></script>
+    <script src="../cannon.js/libs/cannon.js"></script>
+    <script src="js/cannon.demo.js"></script>
+    <script src="../cannon.js/libs/dat.gui.js"></script>
+    <script src="../cannon.js/libs/TrackballControls.js"></script>
+    <script src="../cannon.js/libs/Detector.js"></script>
+    <script src="../cannon.js/libs/Stats.js"></script>
+    <script src="../cannon.js/libs/smoothie.js"></script>
+</head>
+<body>
+
+<script>
+    var demo = new CANNON.Demo();
+
+    demo.addScene("链条破坏", function () {
+        var size = 0.45;
+        var dist = size*2+0.12;
+        var world = setupWorld(demo);
+        var sphereShape = new CANNON.Sphere(size);
+        var mass = 1;
+        var lastBody = null;
+        var N = 15;
+        world.solver.iterations = N; // 处理长度为N的链条时,迭代次数至少为N次
+        var constraints = [];
+        for(var i=0; i<N; i++){
+            // 创建一个body
+            var spherebody = new CANNON.Body({ mass: i===0 ? 0 : mass }); // 最顶端的质量为0,不受重力影响
+            spherebody.addShape(sphereShape);
+            spherebody.position.set(0,0,(N-i)*dist - 9);
+            world.addBody(spherebody);
+            demo.addVisual(spherebody);
+
+            // 将该body与上一个相连
+            var c;
+            if(lastBody!==null){
+                world.addConstraint(c = new CANNON.DistanceConstraint(spherebody,lastBody,dist));
+                constraints.push(c);
+            }
+
+            // 将当前body标记为上一个
+            lastBody = spherebody;
+        }
+
+        world.addEventListener('postStep', function(){
+            for(var i=constraints.length-1; i>=0; i--){
+                // multiplier是加到约束中的成比例的力的大小
+                // 超过了某个限制就移除约束
+                var m = Math.abs(constraints[i].equations[0].multiplier);
+                if(m > 1000){
+                    world.removeConstraint(constraints[i]);
+                }
+            }
+        });
+
+        // 发射一个body去破坏链条
+        var spherebody = new CANNON.Body({ mass: mass*2 });
+        spherebody.addShape(sphereShape);
+        spherebody.position.set(20,0,3);
+        spherebody.velocity.x = -30;
+        world.addBody(spherebody);
+        demo.addVisual(spherebody);
+    });
+
+    demo.start();
+
+    function setupWorld(demo){
+        // 创建物理世界
+        var world = demo.getWorld();
+        world.gravity.set(0,0,-10);
+        world.broadphase = new CANNON.NaiveBroadphase();
+
+        return world;
+    }
+</script>
+
+</body>
+</html>
