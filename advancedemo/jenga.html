@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>cannon.js - 积木</title>
+
+    <script src="../cannon.js/libs/Three.js"></script>
+    <script src="../cannon.js/libs/cannon.js"></script>
+    <script src="js/cannon.demo.js"></script>
+    <script src="../cannon.js/libs/dat.gui.js"></script>
+    <script src="../cannon.js/libs/TrackballControls.js"></script>
+    <script src="../cannon.js/libs/Detector.js"></script>
+    <script src="../cannon.js/libs/Stats.js"></script>
+    <script src="../cannon.js/libs/smoothie.js"></script>
+</head>
+<body>
+
+<script>
+    var demo = new CANNON.Demo();
+
+    demo.addScene("积木", function () {
+        var world = demo.getWorld();
+        //world.allowSleep = true;
+        world.gravity.set(0,0,-5);
+        world.broadphase = new CANNON.NaiveBroadphase();
+        world.solver.iterations = 50;
+
+        world.defaultContactMaterial.contactEquationStiffness = 5e6;
+        world.defaultContactMaterial.contactEquationRelaxation = 3;
+
+        // 地面
+        var groundShape = new CANNON.Plane();
+        var groundBody = new CANNON.Body({
+            mass: 0
+        });
+        groundBody.addShape(groundShape);
+        groundBody.position.set(-10,0,0);
+        world.addBody(groundBody);
+        demo.addVisual(groundBody);
+
+        // 积木块
+        var size = 0.5;
+        var mass = 1;
+        var gap = 0.02;
+        for (var i = 0; i < 10; i++) { // 共10层
+            for (var j = 0; j < 3; j++) { // 每层3块
+                var body = new CANNON.Body({mass: mass});
+
+                // 奇数层
+                var he = new CANNON.Vec3(size * 3, size, size);
+                var dx = 0;
+                var dy = 1;
+
+                // 偶数层
+                if (i % 2 === 0) {
+                    he.set(size, size * 3, size);
+                    dx = 1;
+                    dy = 0;
+                }
+                var shape = new CANNON.Box(he);
+                body.addShape(shape);
+                body.position.set(
+                        2 * (size + gap) * (j - 1) * dx,
+                        2 * (size + gap) * (j - 1) * dy,
+                        2 * (size + gap) * (i + 1)
+                )
+
+                world.addBody(body);
+                demo.addVisual(body);
+            }
+        }
+    });
+
+    demo.start();
+</script>
+
+</body>
+</html>
