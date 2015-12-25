@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>cannon.js - 三角网格</title>
+
+    <script src="../cannon.js/libs/Three.js"></script>
+    <script src="../cannon.js/libs/cannon.js"></script>
+    <script src="js/cannon.demo.js"></script>
+    <script src="../cannon.js/libs/dat.gui.js"></script>
+    <script src="../cannon.js/libs/TrackballControls.js"></script>
+    <script src="../cannon.js/libs/Detector.js"></script>
+    <script src="../cannon.js/libs/Stats.js"></script>
+    <script src="../cannon.js/libs/smoothie.js"></script>
+</head>
+<body>
+
+<script>
+    /**
+     * 从几何体的三角网格中生成物理碰撞体
+     */
+    var demo = new CANNON.Demo();
+    var size = 2;
+
+    demo.addScene("三角网格",function(){
+        var shape = CANNON.Trimesh.createTorus(4, 3.5, 16, 16);
+
+        // 物理世界
+        var world = demo.getWorld();
+        world.gravity.set(0,0,-10);
+        world.broadphase = new CANNON.NaiveBroadphase();
+        world.solver.iterations = 10;
+
+        world.defaultContactMaterial.contactEquationStiffness = 1e7;
+        world.defaultContactMaterial.contactEquationRelaxation = 4;
+
+        // 地面
+        var groundShape = new CANNON.Plane();
+        var groundBody = new CANNON.Body({ mass: 0 });
+        groundBody.addShape(groundShape);
+        world.addBody(groundBody);
+        demo.addVisual(groundBody);
+
+        // 球
+        var sphereShape = new CANNON.Sphere(1);
+        var sphereBody = new CANNON.Body({
+            mass: 1,
+            shape: sphereShape,
+            position: new CANNON.Vec3(3,3,11)
+        });
+        world.addBody(sphereBody);
+        demo.addVisual(sphereBody);
+
+        // 地面上的物体
+        var shapeBody = new CANNON.Body({ mass: 1 });
+        shapeBody.addShape(shape);
+        var pos = new CANNON.Vec3(0,0,size);
+        shapeBody.position.set(0,0,size*2);
+        shapeBody.velocity.set(0,1,1);
+        shapeBody.angularVelocity.set(0,0,0);
+        world.addBody(shapeBody);
+        demo.addVisual(shapeBody);
+    });
+
+    demo.addScene("光线投射",function(){
+        var shape = CANNON.Trimesh.createTorus(4, 3.5, 16, 16);
+
+        // 创建物理世界
+        var world = demo.getWorld();
+        world.gravity.set(0,0,0);
+
+        // 粒子阵,表示光线照射在物体上的位置
+        var N = 5;
+        var particleShape = new CANNON.Particle();
+        var particleBodies = [];
+        for(var i=0; i<N*N; i++){
+            var particleBody = new CANNON.Body({
+                mass: 1,
+                shape: particleShape,
+                collisionResponse: false
+            });
+            world.addBody(particleBody);
+            demo.addVisual(particleBody);
+            particleBodies.push(particleBody);
+        }
+
+        // 创建地面
+        var shapeBody = new CANNON.Body({ mass: 1, position: new CANNON.Vec3(0.01, 0.01, 0.01) });
+        shapeBody.addShape(shape);
+        shapeBody.angularVelocity.set(0,1,0);
+        world.addBody(shapeBody);
+        demo.addVisual(shapeBody);
+
+        var from = new CANNON.Vec3(10,1,0);
+        var to = new CANNON.Vec3(-10,1,0);
+        var result = new CANNON.RaycastResult();
+        var raycastOptions = {};
+        var listener = function (evt) {
+            for(var i=0; i<N; i++){
+                for(var j=0; j<N; j++){
+                    from.set(
+                            10,
+                            i * 0.1,
+                            j * 0.1
+                    );
+                    to.set(
+                            -10,
+                            i * 0.1,
+                            j * 0.1
+                    );
+                    result.reset();
+                    world.raycastClosest(from, to, raycastOptions, result);
+                    particleBodies[i * N + j].position.copy(result.hitPointWorld);
+                }
+            }
+        };
+        world.addEventListener('postStep', listener);
+        var destroyer = function(){
+            world.removeEventListener('postStep', listener);
+            demo.removeEventListener('destroy', destroyer);
+        };
+        demo.addEventListener('destroy', destroyer);
+    });
+
+    demo.start();
+</script>
+
+</body>
+</html>
