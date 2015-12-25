@@ -12,7 +12,7 @@ body {
 
 .container {
     width     : 90%;
-    max-width : 700px;
+    max-width : 710px;
     margin    : 0 auto;
 }
 
@@ -245,6 +245,10 @@ a {
 
 .cf {
     zoom : 1;
+}
+
+.container a {
+    text-decoration: none;
 }
 
 .container a img {
