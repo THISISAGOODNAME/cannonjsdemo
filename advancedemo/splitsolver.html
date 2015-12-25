@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>cannon.js - 分治方程求解器</title>
+
+    <script src="../cannon.js/libs/Three.js"></script>
+    <script src="../cannon.js/libs/cannon.js"></script>
+    <script src="js/cannon.demo.js"></script>
+    <script src="../cannon.js/libs/dat.gui.js"></script>
+    <script src="../cannon.js/libs/TrackballControls.js"></script>
+    <script src="../cannon.js/libs/Detector.js"></script>
+    <script src="../cannon.js/libs/Stats.js"></script>
+    <script src="../cannon.js/libs/smoothie.js"></script>
+</head>
+<body>
+
+<script>
+    /**
+     * 使用SplitSolver.
+     * 如果你把一个非零容忍一个求解器，停止迭代时的总误差小
+     * 换句话说：当系统解决“足够好”时停止迭代。
+     *
+     * splitsolver分割系统成独立的部分，每个部分的subsolver各自运行。
+     * 子系统中的总误差会比整个系统小很多倍，所以我们可以多次减少我们做的迭代次数。
+     *
+     * 并且,我们可以在单独的线程中运行子系统，加快计算的速度
+     * 但是,现在的CANNON是单线程的
+     *
+     * 第一个场景使用划分,第二个不划分
+     */
+
+    var demo = new CANNON.Demo();
+    var size = 0.5;
+
+    var shape = new CANNON.Sphere(size);
+    var shape = new CANNON.Box(new CANNON.Vec3(size*0.5,size*0.5,size*0.5));
+    demo.addScene("使用分治求解器",function(){
+        createScene(demo,shape,true);
+    });
+    demo.addScene("不使用分治求解器",function(){
+        createScene(demo,shape,false);
+    });
+
+    demo.start();
+
+    function createScene(demo,shape,split){
+
+        // 物理世界
+        var world = demo.getWorld();
+        world.gravity.set(0,0,-10);
+        world.broadphase = new CANNON.NaiveBroadphase();
+
+        var solver = new CANNON.GSSolver();
+        solver.iterations = 50;
+        world.defaultContactMaterial.contactEquationStiffness = 1e7;
+        world.defaultContactMaterial.contactEquationRelaxation = 5;
+        solver.tolerance = 0.0001;
+        if(split)
+            world.solver = new CANNON.SplitSolver(solver);
+        else
+            world.solver = solver;
+
+        // 地面
+        var groundShape = new CANNON.Plane();
+        var groundBody = new CANNON.Body({ mass: 0 });
+        groundBody.addShape(groundShape);
+        world.addBody(groundBody);
+        demo.addVisual(groundBody);
+
+        // 地面上的图形
+        var N = 5;
+        for(var i=0; i<N; i++){
+            for(var j=0; j<N; j++){
+                var shapeBody = new CANNON.Body({ mass: 1 });
+                shapeBody.addShape(shape);
+                shapeBody.position.set( (i-N*0.5)*size*2*1.1,
+                        (j-N*0.5)*size*2*1.1,
+                        size*1.05);
+                world.addBody(shapeBody);
+                demo.addVisual(shapeBody);
+            }
+        }
+
+
+        var shapeBody = new CANNON.Body({ mass: 1 });
+        shapeBody.addShape(shape);
+        shapeBody.position.set( size,size,
+                size*5);
+        world.addBody(shapeBody);
+        demo.addVisual(shapeBody);
+    }
+</script>
+
+</body>
+</html>
