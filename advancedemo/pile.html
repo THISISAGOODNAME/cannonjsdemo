@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>cannon.js - 大量堆积</title>
+
+    <script src="../cannon.js/libs/Three.js"></script>
+    <script src="../cannon.js/libs/cannon.js"></script>
+    <script src="js/cannon.demo.js"></script>
+    <script src="../cannon.js/libs/dat.gui.js"></script>
+    <script src="../cannon.js/libs/TrackballControls.js"></script>
+    <script src="../cannon.js/libs/Detector.js"></script>
+    <script src="../cannon.js/libs/Stats.js"></script>
+    <script src="../cannon.js/libs/smoothie.js"></script>
+</head>
+<body>
+
+<script>
+    var demo = new CANNON.Demo();
+    var size = 1;
+    var interval;
+
+    demo.addScene("小球堆积", function () {
+        if(interval) clearInterval(interval);
+
+        var world = demo.getWorld();
+        world.gravity.set(0,0,-50);
+        world.broadphase = new CANNON.NaiveBroadphase();
+        world.solver.iterations = 5;
+
+        world.defaultContactMaterial.contactEquationStiffness = 5e6;
+        world.defaultContactMaterial.contactEquationRelaxation = 10;
+
+        // 由于有大量不常移动的球, 可以用不精确的四元数归一化来加速
+        world.quatNormalizeFast = true;
+        world.quatNormalizeSkip = 3; // 也没必要经常做四元数归一化
+
+        // 地面
+        var groundShape = new CANNON.Plane(new CANNON.Vec3(0,0,1));
+        var groundBody = new CANNON.Body({ mass: 0 });
+        groundBody.addShape(groundShape);
+        groundBody.position.set(0,0,0);
+        world.addBody(groundBody);
+        demo.addVisual(groundBody);
+
+        // -x墙
+        var planeShapeXmin = new CANNON.Plane();
+        var planeXmin = new CANNON.Body({ mass: 0 });
+        planeXmin.addShape(planeShapeXmin);
+        planeXmin.quaternion.setFromAxisAngle(new CANNON.Vec3(0,1,0),Math.PI/2);
+        planeXmin.position.set(-5,0,0);
+        world.addBody(planeXmin);
+
+        // +x墙
+        var planeShapeXmax = new CANNON.Plane();
+        var planeXmax = new CANNON.Body({ mass: 0 });
+        planeXmax.addShape(planeShapeXmax);
+        planeXmax.quaternion.setFromAxisAngle(new CANNON.Vec3(0,1,0),-Math.PI/2);
+        planeXmax.position.set(5,0,0);
+        world.addBody(planeXmax);
+
+        // -y墙
+        var planeShapeYmin = new CANNON.Plane();
+        var planeYmin = new CANNON.Body({ mass: 0 });
+        planeYmin.addShape(planeShapeYmin);
+        planeYmin.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0),-Math.PI/2);
+        planeYmin.position.set(0,-5,0);
+        world.addBody(planeYmin);
+
+        // +y墙
+        var planeShapeYmax = new CANNON.Plane();
+        var planeYmax = new CANNON.Body({ mass: 0 });
+        planeYmax.addShape(planeShapeYmax);
+        planeYmax.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0),Math.PI/2);
+        planeYmax.position.set(0,5,0);
+        world.addBody(planeYmax);
+
+        var bodies = [];
+        var i = 0;
+        interval = setInterval(function() {
+            // 小球从天而降
+            i++;
+            var sphereShape = new CANNON.Sphere(size);
+            var body = new CANNON.Body({
+                mass: 5,
+                position: new CANNON.Vec3(
+                        2*size*Math.sin(i),
+                        2*size*Math.cos(i),
+                        7*2*size
+                )
+            });
+            body.addShape(sphereShape);
+            world.addBody(body);
+            demo.addVisual(body);
+            bodies.push(body);
+
+            // 为了性能,让堆积的小球不超过80个
+            if (bodies.length > 80) {
+                var b = bodies.shift();
+                demo.removeVisual(b);
+                world.remove(b);
+            }
+        }, 100);
+    });
+
+    demo.start();
+</script>
+
+</body>
+</html>
