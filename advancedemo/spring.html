@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>cannon.js - 弹簧约束</title>
+
+    <script src="../cannon.js/libs/Three.js"></script>
+    <script src="../cannon.js/libs/cannon.js"></script>
+    <script src="js/cannon.demo.js"></script>
+    <script src="../cannon.js/libs/dat.gui.js"></script>
+    <script src="../cannon.js/libs/TrackballControls.js"></script>
+    <script src="../cannon.js/libs/Detector.js"></script>
+    <script src="../cannon.js/libs/Stats.js"></script>
+    <script src="../cannon.js/libs/smoothie.js"></script>
+</head>
+<body>
+
+<script>
+    var demo = new CANNON.Demo();
+
+    demo.addScene("弹簧约束",function(){
+        // 创建物理世界
+        var world = demo.getWorld();
+        world.gravity.set(0,0,-10);
+        world.broadphase = new CANNON.NaiveBroadphase();
+
+        // 创建一个固定的小球
+        var sphereShape = new CANNON.Sphere(0.1),
+                sphereBody = new CANNON.Body({ mass: 0 });
+        sphereBody.addShape(sphereShape);
+        world.addBody(sphereBody);
+        demo.addVisual(sphereBody);
+
+        // 创建一个盒子
+        var size = 1;
+        var halfExtents = new CANNON.Vec3(size,size*0.3,size),
+                boxShape = new CANNON.Box(halfExtents);
+        var boxBody = new CANNON.Body({ mass: 5 });
+        boxBody.addShape(boxShape);
+        boxBody.position.set(-size,0,-size);
+        world.addBody(boxBody);
+        demo.addVisual(boxBody);
+
+        /**
+         * 弹簧不可见
+         */
+        // 小球和盒子之间添加弹簧约束
+        var spring = new CANNON.Spring(boxBody,sphereBody,{
+            localAnchorA: new CANNON.Vec3(size,0,size),
+            localAnchorB: new CANNON.Vec3(0,0,0),
+            restLength : 0,
+            stiffness : 50,
+            damping : 1
+        });
+
+        // 每个时间不长计算弹力
+        world.addEventListener("postStep",function(event){
+            spring.applyForce();
+        });
+    });
+
+    demo.start();
+</script>
+
+</body>
+</html>
