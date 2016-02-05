@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<!-- saved from url=(0014)about:internet -->
+<html lang="en">
+<head>
+<title>Liquid Labs</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="IE=11" />
+<meta http-equiv="Pragma" content="no-cache">
+
+<link rel="stylesheet" href="css/consolas.css">
+<link rel="stylesheet" href="css/open-sans.css">
+<link rel="stylesheet" href="css/main.css">
+
+
+<script src="js/codemirror.min.js"></script>
+<script src="js/esprima.min.js"></script>
+<script src="js/CodeEditor.js"></script>
+
+<script src="js/three.min.js"></script>
+<script src="js/Shaders.js"></script>
+<script src="js/blobShaders.js"></script>
+<script src="js/b2d.js"></script>
+<script src="js/liquidfunAdd_s.js"></script>
+<script src="js/LiquidRender_s.js"></script>
+<script src="js/uil.min.js"></script>
+
+</head><body>
+<canvas id="canvas"></canvas>
+<img style="position: absolute; top: 0; right: 0; border: 0;" src="textures/ribbon.png"></a>
+<a id="ribbon" href="https://github.com/lo-th/Liquid.lab"></a>
+<script>
+
+var startTest = 'Blob';
+var startFolder = 'tests_new';
+
+var canvas = document.getElementById( 'canvas' );
+canvas.oncontextmenu = function(e){ e.preventDefault(); };
+canvas.ondrop = function(e) { e.preventDefault(); };
+
+var menu = document.createElement( 'div' );
+menu.className = 'menu';
+document.body.appendChild( menu );
+
+var title = document.createElement( 'div' );
+title.className = 'title';
+menu.appendChild( title );
+
+var subtitle = document.createElement( 'div' );
+subtitle.className = 'subtitle';
+menu.appendChild( subtitle );
+
+
+// code editor
+var editor = new CodeEditor(testSwitch);
+
+// test list
+var newlist = ['Planet', 'Moto', 'Segway', 'Break', 'Truck', 'Blob'];
+var liquidlist = ['DamBreak','Drawing','Elastic','Impulse','LiquidTimer','Particles','RigidParticles','Soup', 'SoupStirrer','Sparky','SurfaceTension','WaveMachine'];
+var baselist = ['AddPair', 'AntiPointy', 'ApplyForce', 'BodyTypes', 'Breakable', 'Bridge', 'Bullet', 'Cantilever', 'Car', 'Chain', 'CharacterCollision', 'CollisionFiltering', 'CompoundShapes', 'Confined', 'ConvexHull', 'ConveyorBelt', 'CornerCase', 'Dominos',  'DumpShell', 'EdgeShape', 'EdgeTest',  'Faucet', 'Gears', 'Hw', 'Maxwell', 'Mobile', 'MobileBalanced', 'MotorJoint',  'Pinball', 'Pointy', 'Prismatic', 'Pulley', 'Pyramid', 'Ramp', 'Revolute',  'Rope', 'RopeJoint', 'SensorTest', 'ShapeEditing', 'SliderCrank', 'SphereStack',  'TheoJansen', 'Tiles', 'Tumbler', 'VaryingFriction', 'VaryingRestitution', 'VerticalStack',  'Web',
+];
+
+var demoList = new UIL.List({target:menu, callback:loadNew, name:' ', color:'no', size:100, list:newlist, pos:{left:'10px', top:'10px'}, simple:true, full:true, value:'ADVANCED' });
+var liquidList = new UIL.List({target:menu, callback:loadLiquid, name:' ', color:'no', size:110, list:liquidlist, pos:{left:'120px', top:'10px'}, simple:true, full:false, value:'LIQUID' });
+var basicList = new UIL.List({target:menu, callback:loadBase, name:' ', color:'no', size:130, list:baselist, pos:{left:'240px', top:'10px'}, simple:true, full:false, value:'BASIC' });
+
+function loadBase(name){startTest=name; startFolder = 'tests_base'; editor.load('tests_base/test_'+name+'.js'); basicList.text('BASIC'); }
+function loadNew(name){startTest=name; startFolder = 'tests_new';  editor.load('tests_new/test_'+name+'.js'); demoList.text('ADVANCED'); }
+function loadLiquid(name){startTest=name; startFolder = 'tests_liquid';  editor.load('tests_liquid/test_'+name+'.js'); liquidList.text('LIQUID'); }
+
+// middle drag view
+var dragView = false;
+var separator = document.createElement('div');
+separator.className = 'separator';
+separator.innerHTML = '|||'
+separator.style.left = Math.floor(window.innerWidth/3) + 'px';
+document.body.appendChild( separator );
+separator.onmousedown = function(e){ dragView = true; }
+
+
+
+
+
+// shouldnt be a global :(
+
+var particleColors = [
+    new b2ParticleColor(0xff, 0x00, 0x00, 0xff), // red
+    new b2ParticleColor(0x00, 0xff, 0x00, 0xff), // green
+    new b2ParticleColor(0x00, 0x00, 0xff, 0xff), // blue
+    new b2ParticleColor(0xff, 0x8c, 0x00, 0xff), // orange
+    new b2ParticleColor(0x00, 0xce, 0xd1, 0xff), // turquoise
+    new b2ParticleColor(0xff, 0x00, 0xff, 0xff), // magenta
+    new b2ParticleColor(0xff, 0xd7, 0x00, 0xff), // gold
+    new b2ParticleColor(0x00, 0xff, 0xff, 0xff)  // cyan
+];
+
+var world = null;
+
+var renderer,camera, scene, blobEffect, baseGroup, extraGroup;
+var vsize = {w:window.innerWidth, h:window.innerHeight}
+var particlesCloud;
+var liquidRender;
+var objects = [];
+var timeStep = 1.0 / 60.0;
+var velocityIterations = 8;
+var positionIterations = 3;
+var test = {};
+//var mouseJoint = null;
+
+var planeZ = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+var g_groundBody = null;
+
+function printErrorMsg(msg) {
+    var domElement = document.createElement('div');
+    domElement.style.textAlign = 'center';
+    domElement.innerHTML = msg;
+    document.body.appendChild(domElement);
+};
+
+function init() {
+    var w = window.innerWidth/2;
+
+    camera = new THREE.PerspectiveCamera(70 , w / window.innerHeight , 1, 10000);
+
+    try {
+        renderer = new THREE.WebGLRenderer({canvas:canvas, precision:"mediump", antialias: true,  alpha: true });
+    } catch( error ) {
+        printErrorMsg('<p>Sorry, your browser does not support WebGL.</p>'
+                    + '<p>This testbed application uses WebGL to quickly draw'
+                    + ' LiquidFun particles.</p>'
+                    + '<p>LiquidFun can be used without WebGL, but unfortunately'
+                    + ' this testbed cannot.</p>'
+                    + '<p>Have a great day!</p>');
+        return;
+    }
+
+    //renderer.setClearColor(0x25292e);
+    renderer.setClearColor(0x000000, 0);
+    renderer.setSize(w, window.innerHeight);
+    renderer.autoClear = false;
+
+    scene = new THREE.Scene();
+
+    baseGroup = new THREE.Group();
+    extraGroup = new THREE.Group();
+    scene.add(baseGroup);
+    scene.add(extraGroup);
+
+    camera.lookAt(scene.position);
+
+    blobEffect = new BlobEffect();
+
+    this.mouseJoint = null;
+
+    // hack
+    liquidRender = new LiquidRender();
+    var gravity = new b2Vec2(0, -10);
+    world = new b2World(gravity);
+
+
+    
+
+    //console.log(world)
+
+    Testbed();
+}
+
+function testSwitch(testName) {
+    location.hash = startTest;
+    title.innerHTML = startTest;
+    ResetWorld();
+    /*world.SetGravity(new b2Vec2(0, -9.81));
+    var bd = new b2BodyDef;
+    g_groundBody = world.CreateBody(bd);*/
+    test = new window[testName];
+}
+
+function Testbed() {
+    // Init world
+    var that = this;
+    /*document.addEventListener('keydown', function(e) {
+        if(editor.isFocus) return;
+        e.preventDefault();
+        if(test.Keyboard !== undefined) test.Keyboard( String.fromCharCode(e.which || e.keyCode), e.which || e.keyCode );
+    });
+    document.addEventListener('keyup', function(e) {
+        if(editor.isFocus) return;
+        e.preventDefault();
+        if(test.KeyboardUp !== undefined) test.KeyboardUp( String.fromCharCode(e.which || e.keyCode), e.which || e.keyCode );
+    });
+
+    canvas.addEventListener('mousedown', function(e) {
+        var p = getMouseCoords(e);
+        var aabb = new b2AABB();
+        aabb.lowerBound.Set(p.x-0.001, p.y-0.001);
+        aabb.upperBound.Set(p.x+0.001, p.y+0.001);
+        //var d = new b2Vec2(0.01, 0.01);
+
+        //b2Vec2.Sub(aabb.lowerBound, p, d);
+        //b2Vec2.Add(aabb.upperBound, p, d);
+
+        var queryCallback = new QueryCallback(p);
+        world.QueryAABB(queryCallback, aabb);
+
+        
+        if (test.MouseDown !== undefined) test.MouseDown(p, queryCallback);
+        else {
+            if (queryCallback.fixture) {
+                var body = queryCallback.fixture.body;
+
+                that.mouseJoint = world.addJoint({
+                    type:'mouse', visible:true,
+                    bodyA: g_groundBody, bodyB: body,
+                    target:p, maxForce : 1000 * body.GetMass()
+                });
+        
+                body.SetAwake(true);
+            }
+        }
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if(dragView){
+            separator.style.left = (e.clientX-10)+'px';
+            resize();
+        }
+    });
+
+    canvas.addEventListener('mousemove', function(e) {
+     
+            var p = getMouseCoords(e);
+            if (that.mouseJoint){ 
+                that.mouseJoint.SetTarget(p);
+                that.mouseJoint.target = p;
+            }
+            if (test.MouseMove !== undefined) test.MouseMove(p);
+        //}
+        
+    });
+
+    document.addEventListener('mouseup', function(e) {
+        dragView = false;
+    });
+
+    canvas.addEventListener('mouseup', function(e) {
+        //dragView = false;
+        if (that.mouseJoint !== null) {
+            world.DestroyJoint(that.mouseJoint);
+            that.mouseJoint = null;
+        }
+        if (test.MouseUp !== undefined) test.MouseUp(getMouseCoords(e));
+        
+    });*/
+
+
+    window.addEventListener( 'resize', resize, false );
+    resize();
+
+    
+
+    var hash = location.hash.substr( 1 );
+
+    if(hash !==''){ 
+        console.log('yoooo',hash);
+        testLink(hash);
+    }
+
+    editor.load(startFolder+'/test_'+startTest+'.js');
+
+    render();
+}
+
+var tell = function(string){
+    subtitle.innerHTML = string;
+}
+
+var testLink = function(name){
+    var i = newlist.length;
+    while(i--) if(newlist[i] === name){ startFolder = 'tests_new'; startTest=name; return;}
+    i = liquidlist.length;
+    while(i--) if(liquidlist[i] === name){ startFolder = 'tests_liquid'; startTest=name; return;}
+    i = baselist.length;
+    while(i--) if(baselist[i] === name){ startFolder = 'tests_base'; startTest=name; return;}
+};
+
+var render = function() {
+    // bring objects into world
+    liquidRender.currentVertex = 0;
+    if (test.Step !== undefined) test.Step();
+    else Step();
+
+
+    renderer.clear();
+  
+    liquidRender.draw();
+
+    //renderer.resetGLState();
+    
+
+    
+    //else{  renderer.render(sceneBlob, camera); }
+
+    if(blobEffect.isActive) blobEffect.render();
+    else renderer.render(scene, camera);
+
+    
+
+    
+    //;
+
+    requestAnimationFrame(render);
+};
+
+/*var ClearForces = function() {
+    if (world !== null) {
+        var i;
+
+        i = world.joints.length;
+        while ( i--) { if(world.joints[i].SetMotorSpeed) world.joints[i].SetMotorSpeed(0); }
+        i = world.bodies.length
+        var direction = new b2Vec2();
+        while ( i-- ) {//GetWorldCenter()
+           world.bodies[i].ApplyForce(direction, world.bodies[i].GetPosition());
+           world.bodies[i].ApplyTorque(0);
+           //world.bodies[i].ApplyImpulse(direction, world.bodies[i].GetWorldCenter());
+          // world.bodies[i].SetLinearVelocity(direction);
+          // world.bodies[i].SetAngularVelocity(0);
+
+
+        }
+        //while (world.particleSystems.length > 0) { world.DestroyParticleSystem(world.particleSystems[0]); }
+    }
+}*/
+
+var ResetWorld = function() {
+   /* if (world !== null) {
+        while (world.joints.length > 0) { world.DestroyJoint(world.joints[0]); }
+        while (world.bodies.length > 0) { world.DestroyBody(world.bodies[0]); }
+        while (world.particleSystems.length > 0) { world.DestroyParticleSystem(world.particleSystems[0]); }
+    }*/
+    camera.position.set(0,0,20);
+    camera.lookAt(new THREE.Vector3(0,0,0));
+    tell('');
+};
+
+var Step = function() {
+    world.Step(timeStep, velocityIterations, positionIterations);
+};
+
+/**@constructor*/
+function QueryCallback(point) {
+    this.point = point;
+    this.fixture = null;
+};
+
+/**@return bool*/
+QueryCallback.prototype.ReportFixture = function(fixture) {
+    var body = fixture.body;
+   // if (body.GetType() === b2_dynamicBody) {
+        var inside = fixture.TestPoint(this.point);
+        if (inside) {
+            this.fixture = fixture;
+            return true;
+        }
+   // }
+    return false;
+};
+
+
+function resize() {
+
+    var x = separator.getBoundingClientRect().left + 20;
+    vsize.w = window.innerWidth - x;
+    vsize.h = window.innerHeight;
+
+    editor.content.style.width =  (x-20)+'px';
+    separator.style.lineHeight = vsize.h+'px';
+    menu.style.left = (x+10) +'px';
+
+    canvas.style.left = x +'px';
+    camera.aspect = vsize.w / vsize.h;
+    camera.updateProjectionMatrix();
+    renderer.setSize( vsize.w, vsize.h );
+
+    blobEffect.resize();
+}
+
+function getMouseCoords(e) {
+    var x = separator.getBoundingClientRect().left + 20;
+    var w = window.innerWidth - x;
+    var h = window.innerHeight;
+    var mouse = new THREE.Vector3( ((e.clientX - x) / w) * 2 - 1, -(e.clientY / h) * 2 + 1, 0.5 );
+    mouse.unproject( camera );
+    var dir = mouse.sub(camera.position).normalize();
+    var distance = -camera.position.z / dir.z;
+    var pos = camera.position.clone().add(dir.multiplyScalar(distance));
+    var p = new b2Vec2(pos.x, pos.y);
+    return p;
+}
+
+init();
+
+</script></body></html>

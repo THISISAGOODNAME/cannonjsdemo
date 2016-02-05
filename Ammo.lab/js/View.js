@@ -6,10 +6,11 @@
 *    THREE ultimate manager
 */
 
+'use strict';
 // MATH ADD
-Math.degtorad = 0.0174532925199432957;
-Math.radtodeg = 57.295779513082320876;
-Math.PI = 3.141592653589793;
+Math.degtorad = Math.PI / 180;//0.0174532925199432957;
+Math.radtodeg = 180 / Math.PI;//57.295779513082320876;
+Math.Pi = 3.141592653589793;
 Math.TwoPI = 6.283185307179586;
 Math.PI90 = 1.570796326794896;
 Math.PI270 = 4.712388980384689;
@@ -20,9 +21,14 @@ Math.int = function(x) { return ~~x; };
 
 var view = ( function () {
 
+    var time = 0;
+    var temp = 0;
+    var count = 0;
+    var fps = 0;
+
     var canvas, renderer, scene, camera, controls, debug;
     var ray, mouse, content, targetMouse, rayCallBack, moveplane, isWithRay = false;;
-    var vs = { w:1, h:1, l:400 };
+    var vs = { w:1, h:1, l:0, x:0 };
 
     var helper;
     
@@ -31,21 +37,25 @@ var view = ( function () {
     var terrains = [];
     var softs = [];
     var cars = [];
-    var carsSpeed = [];
+    //var carsSpeed = [];
     var heros = [];
     var extraGeo = [];
 
     var byName = {};
+
+    var currentFollow = null;
 
     //var softsPoints = [];
 
     var geo = {};
     var mat = {};
 
-    var key = [ 0,0,0,0,0,0,0,0 ];
+    // key[8] = controle.
+    //var key = [ 0,0,0,0,0,0,0,0,0 ];
+
 
     var imagesLoader;
-    var currentCar = -1;
+    //var currentCar = -1;
     var isCamFollow = false;
     var isWithShadow = false;
     var shadowGround, light, ambient;
@@ -55,24 +65,26 @@ var view = ( function () {
 
     var environment, envcontext, nEnv = 0, isWirframe = true;
     var envLists = ['wireframe','ceramic','plastic','smooth','metal','chrome','brush','black','glow','red','sky'];
+    var envMap;
 
 
     view = function () {};
 
     view.init = function ( callback ) {
 
-        debug = document.getElementById('debug');
-
-        canvas = document.getElementById('canvas3d');
+        canvas = document.createElement("canvas");
+        canvas.className = 'canvas3d';
         canvas.oncontextmenu = function(e){ e.preventDefault(); };
         canvas.ondrop = function(e) { e.preventDefault(); };
+        document.body.appendChild( canvas );
 
         // RENDERER
 
         try {
-            renderer = new THREE.WebGLRenderer({ canvas:canvas, precision:"mediump", antialias:true, alpha:false });
+            renderer = new THREE.WebGLRenderer({ canvas:canvas, antialias:true, alpha:false });
+            //renderer = new THREE.WebGLRenderer({ canvas:canvas, precision:"mediump", antialias:true, alpha:false });
         } catch( error ) {
-            intro.message('<p>Sorry, your browser does not support WebGL.</p>'
+            if(intro !== null ) intro.message('<p>Sorry, your browser does not support WebGL.</p>'
                         + '<p>This application uses WebGL to quickly draw'
                         + ' AMMO Physics.</p>'
                         + '<p>AMMO Physics can be used without WebGL, but unfortunately'
@@ -81,11 +93,13 @@ var view = ( function () {
             return;
         }
 
-        intro.clear();
+        if(intro !== null ) intro.clear();
 
-        renderer.setClearColor(0x2A2A2A, 1);
+        renderer.setClearColor(0x2B2A2D, 1);
+        //renderer.setSize( 100, 100 );
         renderer.setPixelRatio( window.devicePixelRatio );
-        //renderer.sortObjects = true;
+
+        //renderer.sortObjects = false;
         renderer.gammaInput = true;
         renderer.gammaOutput = true;
 
@@ -105,6 +119,7 @@ var view = ( function () {
         controls.enableKeys = false;
         controls.update();
 
+
         // GEOMETRY
 
         geo['box'] =  new THREE.BufferGeometry().fromGeometry( new THREE.BoxGeometry(1,1,1) );
@@ -122,9 +137,18 @@ var view = ( function () {
         mat['statique'] = new THREE.MeshBasicMaterial({ color:0x333399, name:'statique', wireframe:true, transparent:true, opacity:0.6 });
         mat['hero'] = new THREE.MeshBasicMaterial({ color:0x993399, name:'hero', wireframe:true });
         mat['move'] = new THREE.MeshBasicMaterial({ color:0x999999, name:'move', wireframe:true });
-        mat['cars'] = new THREE.MeshBasicMaterial({ color:0xffffff, name:'cars', wireframe:true, transparent:true });
+        mat['cars'] = new THREE.MeshBasicMaterial({ color:0xffffff, name:'cars', wireframe:true, transparent:true, side: THREE.DoubleSide });
+        mat['tmp1'] = new THREE.MeshBasicMaterial({ color:0xffffff, name:'tmp1', wireframe:true, transparent:true });
+        mat['tmp2'] = new THREE.MeshBasicMaterial({ color:0xffffff, name:'tmp2', wireframe:true, transparent:true });
         mat['movehigh'] = new THREE.MeshBasicMaterial({ color:0xffffff, name:'movehigh', wireframe:true });
         mat['sleep'] = new THREE.MeshBasicMaterial({ color:0x383838, name:'sleep', wireframe:true });
+
+        mat['meca1'] = new THREE.MeshBasicMaterial({ color:0xffffff, name:'meca1', wireframe:true });
+        mat['meca2'] = new THREE.MeshBasicMaterial({ color:0xffffff, name:'meca2', wireframe:true });
+        mat['meca3'] = new THREE.MeshBasicMaterial({ color:0xffffff, name:'meca3', wireframe:true });
+
+        mat['both'] = new THREE.MeshBasicMaterial({ color:0xffffff, name:'both', wireframe:true, side:THREE.DoubleSide  });
+        mat['back'] = new THREE.MeshBasicMaterial({ color:0xffffff, name:'back', wireframe:true, side:THREE.BackSide  });
 
         // GROUND
 
@@ -142,23 +166,58 @@ var view = ( function () {
 
         window.addEventListener( 'resize', view.resize, false );
 
-        document.addEventListener( 'keydown', view.keyDown, false );
-        document.addEventListener( 'keyup', view.keyUp, false );
-
         imagesLoader = new THREE.TextureLoader();
-
-        
 
         this.resize();
         this.initEnv();
 
         // charge basic geometry
-        this.load ( 'basic', callback );
+        //this.load ( 'basic', callback );
+
+        if(callback)callback();
+
+    };
+
+    view.setLeft = function ( x ) { vs.x = x; };
+
+    view.resize = function () {
+
+        vs.h = window.innerHeight;
+        vs.w = window.innerWidth - vs.x;
+
+        canvas.style.left = vs.x +'px';
+        camera.aspect = vs.w / vs.h;
+        camera.updateProjectionMatrix();
+        renderer.setSize( vs.w, vs.h );
+
+        if(editor) editor.resizeMenu( vs.w );
+
+    };
+
+    view.getFps = function () {
+
+        return fps;
+
+    };
+
+    view.getInfo = function () {
+
+        return renderer.info.programs.length;
+
+    };
+
+    view.render = function () {
+
+        time = now();
+        if ( (time - 1000) > temp ){ temp = time; fps = count; count = 0; }; count++;
+
+        this.controlUpdate();
+        renderer.render( scene, camera );
 
     };
 
     view.addMap = function( name, matName ) {
-        var map = imagesLoader.load( 'textures/'+name );
+        var map = imagesLoader.load( 'textures/' + name );
         //map.wrapS = THREE.RepeatWrapping;
         //map.wrapT = THREE.RepeatWrapping;
         map.flipY = false;
@@ -269,21 +328,21 @@ var view = ( function () {
 
         i = cars.length;
         while(i--){
-            if(cars[i].body.material == undefined){
-                k = cars[i].body.children.length;
+            if(cars[i].material == undefined){
+                k = cars[i].children.length;
                 while(k--){
-                    name = cars[i].body.children[k].material.name;
-                    cars[i].body.children[k].material = mat[name]
+                    name = cars[i].children[k].material.name;
+                    if( name !=='helper') cars[i].children[k].material = mat[name]
                 }
             }else{
-                name = cars[i].body.material.name;
-                cars[i].body.material = mat[name];
+                name = cars[i].material.name;
+                cars[i].material = mat[name];
             }
             
-            j = cars[i].w.length;
+            j = cars[i].userData.w.length;
             while(j--){
-                name = cars[i].w[j].material.name;
-                cars[i].w[j].material = mat[name];
+                name = cars[i].userData.w[j].material.name;
+                cars[i].userData.w[j].material = mat[name];
             }
         };
 
@@ -369,56 +428,6 @@ var view = ( function () {
 
     };
 
-    view.keyDown = function ( e ) {
-
-        if( editor.getFocus() ) return;
-        e = e || window.event;
-        switch ( e.keyCode ) {
-            case 38: case 87: case 90: key[0] = 1; break; // up, W, Z
-            case 40: case 83:          key[1] = 1; break; // down, S
-            case 37: case 65: case 81: key[2] = 1; break; // left, A, Q
-            case 39: case 68:          key[3] = 1; break; // right, D
-            case 17: case 67:          key[4] = 1; break; // ctrl, C
-            case 69:                   key[5] = 1; break; // E
-            case 32:                   key[6] = 1; break; // space
-            case 16:                   key[7] = 1; break; // shift
-
-            case 71:                   view.sh_grid(); break; // shift
-        }
-
-        // send to worker
-        //ammo.send( 'key', key );
-
-        //console.log( e.which, String.fromCharCode(e.which) );
-
-    };
-
-    view.keyUp = function ( e ) {
-
-        if( editor.getFocus() ) return;
-        e = e || window.event;
-        switch( e.keyCode ) {
-            case 38: case 87: case 90: key[0] = 0; break; // up, W, Z
-            case 40: case 83:          key[1] = 0; break; // down, S
-            case 37: case 65: case 81: key[2] = 0; break; // left, A, Q
-            case 39: case 68:          key[3] = 0; break; // right, D
-            case 17: case 67:          key[4] = 0; break; // ctrl, C
-            case 69:                   key[5] = 0; break; // E
-            case 32:                   key[6] = 0; break; // space
-            case 16:                   key[7] = 0; break; // shift
-        }
-
-        // send to worker
-        //ammo.send( 'key', key );
-
-    };
-
-    view.getKey = function () {
-
-        return key;
-
-    };
-
     view.sh_grid = function(){
 
         if(helper.visible) helper.visible = false;
@@ -434,14 +443,13 @@ var view = ( function () {
 
     view.load = function ( name, callback ) {
 
-        var loader = new THREE.SEA3D();
+        var loader = new THREE.SEA3D({});
 
         loader.onComplete = function( e ) {
 
             var i = loader.geometries.length, g;
             while(i--){
                 g = loader.geometries[i];
-                //console.log(g.name);
                 geo[g.name] = g;
             };
 
@@ -455,21 +463,74 @@ var view = ( function () {
 
     };
 
-    // CAMERA
+    //--------------------------------------
+    //
+    //   SRC UTILS ViewUtils
+    //
+    //--------------------------------------
 
-    view.activeFollow = function () {
 
-        isCamFollow = true;
+    view.mergeMesh = function(m){
+
+        return THREE.ViewUtils.mergeGeometryArray(m);
 
     };
 
-    view.follow = function () {
+    view.prepaGeometry = function ( g, type ) {
 
-        if (currentCar == -1) return;
-        if( carsSpeed[currentCar] < 10 && carsSpeed[currentCar] > -10 ) return;
-        if(cars[currentCar] == undefined ) return;
+        return THREE.ViewUtils.prepaGeometry( g, type );
 
-        var mesh = cars[currentCar].body;
+    };
+
+
+    //--------------------------------------
+    //
+    //   CAMERA AND CONTROL
+    //
+    //--------------------------------------
+
+    view.controlUpdate = function(){
+
+        //+Math.PI90;
+        //key[9] = controls.getPolarAngle();
+
+        //key[8] = controls.getAzimuthalAngle(); 
+        //key[9] = controls.getPolarAngle(); 
+
+        //tell( key[8] * Math.radtodeg + '/' + key[9] * Math.radtodeg);
+
+        if( isCamFollow ) this.follow();
+        //else key[8] = controls.getAzimuthalAngle();
+
+    };
+
+    view.setFollow = function ( name ) {
+
+        currentFollow = this.getByName(name);
+        if( currentFollow !== null ) isCamFollow = true;
+
+    };
+ 
+    view.follow = function ( name ) {
+
+        if( currentFollow === null ) return;
+
+        //if( currentCar == -1 ) return;
+
+        var mesh = currentFollow;
+
+        if( mesh.userData.speed !== undefined && mesh.userData.type == 'car') {
+            
+            if( mesh.userData.speed < 10 && mesh.userData.speed > -10 ){ 
+               // controls.update();
+                //key[8] = controls.getAzimuthalAngle(); 
+                return;
+            }
+        }
+        //if( carsSpeed[currentCar] < 10 && carsSpeed[currentCar] > -10 ) return;
+        //if( cars[currentCar] == undefined ) return;
+
+        //cars[currentCar].body;
 
         var matrix = new THREE.Matrix4();
         matrix.extractRotation( mesh.matrix );
@@ -480,7 +541,8 @@ var view = ( function () {
 
         var target = mesh.position;
         //var front = cars[currentCar].body.position;
-        var h = Math.atan2( front.z, front.x ) * Math.radtodeg;
+        //var h = Math.atan2( front.z, front.x ) * Math.radtodeg;
+        var h = (Math.atan2( front.x, front.z ) * Math.radtodeg)-180;
 
         view.moveCamera( h, 20, 10, 0.3, target );
 
@@ -490,39 +552,45 @@ var view = ( function () {
 
         l = l || 1;
         if( target ) controls.target.set( target.x || 0, target.y || 0, target.z || 0 );
-        //camera.position.copy( this.orbit( h, v-90, d ) );
-        camera.position.lerp( this.orbit( h, v-90, d ), l );
+        //camera.position.copy( this.orbit( h, v, d ) );
+        camera.position.lerp( this.orbit( h, v, d ), l );
         controls.update();
-
+        
     };
 
     view.orbit = function( h, v, d ) {
 
+        var offset = new THREE.Vector3();
+        
+        var phi = (v-90) * Math.degtorad;
+        var theta = (h+180) * Math.degtorad;
+        offset.x =  d * Math.sin(phi) * Math.sin(theta);
+        offset.y =  d * Math.cos(phi);
+        offset.z =  d * Math.sin(phi) * Math.cos(theta);
+
         var p = new THREE.Vector3();
-        var phi = v * Math.degtorad;
-        var theta = h * Math.degtorad;
+        p.copy(controls.target).add(offset);
+        /*
         p.x = ( d * Math.sin(phi) * Math.cos(theta)) + controls.target.x;
-        p.z = ( d * Math.sin(phi) * Math.sin(theta)) + controls.target.z;
         p.y = ( d * Math.cos(phi)) + controls.target.y;
+        p.z = ( d * Math.sin(phi) * Math.sin(theta)) + controls.target.z;*/
+
+        //key[8] = theta;
+        
         return p;
 
     };
 
-    view.setDriveCar = function ( n ) {
+    view.setDriveCar = function ( name ) {
 
-        currentCar = n;
-        ammo.send('setDriveCar', { n:n });
+        ammo.send('setDriveCar', { n:this.getByName(name).userData.id });
 
     };
 
-    view.findRotation = function ( r ) {
+    view.toRad = function ( r ) {
 
-        if( Math.abs(r[0]) > Math.TwoPI || Math.abs(r[1]) > Math.TwoPI || Math.abs(r[2]) > Math.TwoPI ){
-            // is in degree
-            r[0] *= Math.degtorad;
-            r[1] *= Math.degtorad;
-            r[2] *= Math.degtorad;
-        }
+        var i = r.length;
+        while(i--) r[i] *= Math.degtorad;
         return r;
 
     };
@@ -567,19 +635,23 @@ var view = ( function () {
 
         while( cars.length > 0 ){
             c = cars.pop();
-            carsSpeed.pop();
-            scene.remove( c.body );
-            scene.remove( c.axe );
-            c.helper.clear();
-            i = c.w.length;
-            while(i--){
-                scene.remove( c.w[i] );
+            if( c.userData.helper ){
+                c.remove( c.userData.helper );
+                c.userData.helper.dispose();
             }
+            i = c.userData.w.length;
+            while( i-- ){
+                scene.remove( c.userData.w[i] );
+            }
+            scene.remove( c );
         }
 
         meshs.length = 0;
         perlin = null;
+
         byName = {};
+
+        currentFollow = null;
 
     };
 
@@ -591,100 +663,162 @@ var view = ( function () {
 
     view.add = function ( o ) {
 
-        var statique = o.mass == 0 ? true : false;
-        var material = statique ? mat.statique : mat.move;
+        var isCustomGeometry = false;
 
-        var type = o.type || 'box';
-        var size = o.size || [1,1,1];
-        var pos = o.pos || [0,0,0];
-        var rot = o.rot || [0,0,0];
+        o.mass = o.mass == undefined ? 0 : o.mass;
+        o.type = o.type == undefined ? 'box' : o.type;
+
+        // position
+        o.pos = o.pos == undefined ? [0,0,0] : o.pos;
+
+        // size
+        o.size = o.size == undefined ? [1,1,1] : o.size;
+        if(o.size.length == 1){ o.size[1] = o.size[0]; }
+        if(o.size.length == 2){ o.size[2] = o.size[0]; }
+
+        if(o.geoSize){
+            if(o.geoSize.length == 1){ o.geoSize[1] = o.geoSize[0]; }
+            if(o.geoSize.length == 2){ o.geoSize[2] = o.geoSize[0]; }
+        }
+
+        // rotation is in degree
+        o.rot = o.rot == undefined ? [0,0,0] : this.toRad(o.rot);
+        o.quat = new THREE.Quaternion().setFromEuler( new THREE.Euler().fromArray( o.rot ) ).toArray();
+
+        
+
+        if(o.rotA) o.quatA = new THREE.Quaternion().setFromEuler( new THREE.Euler().fromArray( this.toRad( o.rotA ) ) ).toArray();
+        if(o.rotB) o.quatB = new THREE.Quaternion().setFromEuler( new THREE.Euler().fromArray( this.toRad( o.rotB ) ) ).toArray();
+
+        if(o.angUpper) o.angUpper = this.toRad( o.angUpper );
+        if(o.angLower) o.angLower = this.toRad( o.angLower );
+
         var mesh = null;
 
-        if(type.substring(0,5) == 'joint') {
-
-            if( ( Math.abs(o.min) > Math.TwoPI || Math.abs(o.max) > Math.TwoPI ) && type !== 'jointDistance' ){
-                // is in degree
-                o.min *= Math.degtorad;
-                o.max *= Math.degtorad;
-
-            } 
+        if(o.type.substring(0,5) == 'joint') {
 
             ammo.send( 'add', o );
             return;
 
         }
 
-        if(type == 'plane'){
-            helper.position.set( pos[0], pos[1], pos[2] )
+        if(o.type == 'plane'){
+            helper.position.set( o.pos[0], o.pos[1], o.pos[2] )
             ammo.send( 'add', o ); 
             return;
         }
 
-        if(type == 'cloth'){
+        if(o.type == 'softTriMesh'){
+            this.softTriMesh( o ); 
+            return;
+        }
+
+        if(o.type == 'softConvex'){
+            this.softConvex( o ); 
+            return;
+        }
+
+        if(o.type == 'cloth'){
             this.cloth( o ); 
             return;
         }
 
-        if(type == 'rope'){
+        if(o.type == 'rope'){
             this.rope( o ); 
             return;
         }
 
-        if(type == 'ellipsoid'){
+        if(o.type == 'ellipsoid'){
             this.ellipsoid( o ); 
             return;
         }
 
-        if(type == 'terrain'){
+        if(o.type == 'terrain'){
             this.terrain( o ); 
             return;
         }
 
         
-        if(size.length == 1){ size[1] = size[0]; }
-        if(size.length == 2){ size[2] = size[0]; }
-
-        this.findRotation( rot );
-
         
+
+        var material;
+        if(o.material !== undefined) material = mat[o.material];
+        else material = o.mass ? mat.move : mat.statique;
         
-        if( type == 'capsule' ){
-            var g = new THREE.CapsuleBufferGeometry( size[0] , size[1]*0.5 );
-            extraGeo.push(g);
+        if( o.type == 'capsule' ){
+            var g = new THREE.CapsuleBufferGeometry( o.size[0] , o.size[1]*0.5 );
+            //g.applyMatrix(new THREE.Matrix4().makeRotationY(-Math.PI*0.5));
             mesh = new THREE.Mesh( g, material );
+            extraGeo.push(mesh.geometry);
+            isCustomGeometry = true;
+
+        } else if( o.type == 'mesh' || o.type == 'convex' ){ 
+            o.v = view.prepaGeometry( o.shape, o.type );
+            if(o.geometry){
+                mesh = new THREE.Mesh( o.geometry, material );
+                extraGeo.push(o.geometry);
+                extraGeo.push(o.shape);
+            } else {
+                mesh = new THREE.Mesh( o.shape, material );
+                extraGeo.push(mesh.geometry);
+            }
+        /*} else if( o.type == 'convex' ){ 
+            o.v = view.prepaGeometry( o.shape, true, false );
+            if(o.geometry){
+                mesh = new THREE.Mesh( o.geometry, material );
+                extraGeo.push(o.geometry);
+                extraGeo.push(o.shape);
+            } else {
+                mesh = new THREE.Mesh( o.shape, material );
+                extraGeo.push(mesh.geometry);
+            }
+            //mesh = new THREE.Mesh( o.shape, material );
+            //extraGeo.push(mesh.geometry);*/
+        } else {
+            if(o.geometry){
+                if(o.geoRot || o.geoScale) o.geometry = o.geometry.clone();
+                // rotation only geometry
+                if(o.geoRot){ o.geometry.applyMatrix(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler().fromArray(this.toRad(o.geoRot))));}
+
+            
+                // scale only geometry
+                if(o.geoScale){ 
+                    o.geometry.applyMatrix( new THREE.Matrix4().makeScale( o.geoScale[0], o.geoScale[1], o.geoScale[2] ) );
+                    //material = mat['back'];//material.clone();
+                    //material.side = THREE.BackSide;
+                }
+            }
+            
+
+            mesh = new THREE.Mesh( o.geometry || geo[o.type], material );
+
+            if( o.geometry ){
+                extraGeo.push(o.geometry);
+                mesh.scale.fromArray( o.geoSize );
+                isCustomGeometry = true;
+            }
+
         }
-        else{ 
-            mesh = new THREE.Mesh( geo[type], material );
-            mesh.scale.set( size[0], size[1], size[2] );
+
+
+        if(mesh){
+
+            if( !isCustomGeometry ) mesh.scale.fromArray( o.size );//.set( o.size[0], o.size[1], o.size[2] );
+
+            mesh.position.fromArray( o.pos );
+            mesh.quaternion.fromArray( o.quat );
+
+            mesh.receiveShadow = true;
+            mesh.castShadow = true;
+            
+            this.setName( o, mesh );
+
+            scene.add(mesh);
+
+            // push 
+            if( o.mass ) meshs.push( mesh );
+            else statics.push( mesh );
         }
-
-        
-        mesh.position.set( pos[0], pos[1], pos[2] );
-        mesh.rotation.set( rot[0], rot[1], rot[2] );
-
-        // force physics type of shape
-        if( o.shape ) o.type = o.shape;
-
-
-        if(o.type == 'mesh') o.v = view.getFaces( geo[type] );
-        if(o.type == 'convex') o.v = view.getVertex( geo[type] );
-
-        // color
-        //this.meshColor( mesh, 1, 0.5, 0 );
-
-        // copy rotation quaternion
-        o.quat = mesh.quaternion.toArray();
-
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-
-        this.setName( o, mesh );
-
-        scene.add(mesh);
-
-        // push 
-        if( statique ) statics.push( mesh );
-        else meshs.push( mesh );
         
 
         // send to worker
@@ -692,55 +826,7 @@ var view = ( function () {
 
     };
 
-    view.getVertex = function ( Geometry, Name ) {
-
-        var v = [];
-        var pp, i, n;
-        var geometry = Geometry ? Geometry : this.getGeoByName( Name );
-        pp = geometry.vertices;
-
-        if( pp == undefined ) { // is BufferGeometry
-            v = geometry.attributes.position.array;
-        } else {
-            i = pp.length;
-            while(i--){
-                n = i * 3;
-                v[n+0] = pp[i].x;
-                v[n+1] = pp[i].y;
-                v[n+2] = pp[i].z;
-            }
-        }
-
-        //console.log(v)
-        return v;
-
-    };
-
-    view.getFaces = function ( Geometry, Name ) {
-
-        var v = [];
-        var n, face, va, vb, vc;
-        var geometry = Geometry ? Geometry : this.getGeoByName( Name );
-
-        var pp = geometry.faces;
-        if( pp == undefined ) { // is BufferGeometry
-            v = geometry.attributes.position.array;
-        } else {
-            var pv = geometry.vertices;
-            var i = pp.length;
-            while(i--){
-                n = i * 9;
-                face = pp[i];
-                va = pv[face.a]; vb = pv[face.b]; vc = pv[face.c];
-                v[n+0] = va.x; v[n+1]=va.y; v[n+2]=va.z;
-                v[n+3] = vb.x; v[n+4]=vb.y; v[n+5]=vb.z;
-                v[n+6] = vc.x; v[n+7]=vc.y; v[n+8]=vc.z;
-            }
-        }
-        
-        return v;
-
-    };
+    
 
     view.getGeoByName = function ( name, Buffer ) {
 
@@ -757,24 +843,40 @@ var view = ( function () {
 
     view.character = function ( o ) {
 
-        var size = o.size || [0.5,1,1];
-        var pos = o.pos || [0,3,0];
-        var rot = o.rot || [0,0,0];
+        o.size = o.size == undefined ? [0.5,1,1] : o.size;
+        if(o.size.length == 1){ o.size[1] = o.size[0]; }
+        if(o.size.length == 2){ o.size[2] = o.size[0]; }
 
-        var g = this.capsuleGeo( size[0] , size[1]*0.5 );
-        extraGeo.push(g);
+        //var pos = o.pos || [0,3,0];
+        o.pos = o.pos == undefined ? [0,3,0] : pos;
+        //var rot = o.rot || [0,0,0];
+
+        o.rot = o.rot == undefined ? [0,0,0] : this.toRad(o.rot);
+        o.quat = new THREE.Quaternion().setFromEuler( new THREE.Euler().fromArray( o.rot ) ).toArray();
+
+        var g = new THREE.CapsuleBufferGeometry( o.size[0] , o.size[1]*0.5 );
         var mesh = new THREE.Mesh( g, mat.hero );
+        extraGeo.push(mesh.geometry);
 
-        mesh.position.set( pos[0], pos[1], pos[2] );
-        mesh.rotation.set( rot[0], rot[1], rot[2] );
+        //mesh.position.set( pos[0], pos[1], pos[2] );
+        //mesh.rotation.set( rot[0], rot[1], rot[2] );
+
+        mesh.position.fromArray( o.pos );
+        mesh.quaternion.fromArray( o.quat );
 
         // copy rotation quaternion
-        o.quat = mesh.quaternion.toArray();
-        o.pos = pos;
-        o.size = size;
+        //o.quat = mesh.quaternion.toArray();
+        //o.pos = pos;
+
+        mesh.userData.speed = 0;
+        mesh.userData.type = 'hero';
 
         scene.add(mesh);
         heros.push(mesh);
+
+
+
+        this.setName( o, mesh );
 
         // send to worker
         ammo.send( 'character', o );
@@ -783,7 +885,7 @@ var view = ( function () {
 
     view.vehicle = function ( o ) {
 
-        var type = o.type || 'box';
+        //var type = o.type || 'box';
         var size = o.size || [2,0.5,4];
         var pos = o.pos || [0,0,0];
         var rot = o.rot || [0,0,0];
@@ -792,7 +894,7 @@ var view = ( function () {
 
         var massCenter = o.massCenter || [0,0.25,0];
 
-        this.findRotation( rot );
+        this.toRad( rot );
 
         // chassis
         var mesh;
@@ -823,14 +925,21 @@ var view = ( function () {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
 
+        
+
         scene.add( mesh );
 
-        // center of mass
+        this.setName( o, mesh );
 
-        var helper = new carHelper( wPos );
+        mesh.userData.speed = 0;
+        mesh.userData.steering = 0;
+        mesh.userData.NumWheels = o.nw || 4;
+        mesh.userData.type = 'car';
 
-        //var axe = //THREE.AxisHelper(1);
-        scene.add( helper.mesh );
+        if(o.helper){
+            mesh.userData.helper = new THREE.CarHelper( wPos );
+            mesh.add( mesh.userData.helper );
+        }
 
         // wheels
 
@@ -840,11 +949,11 @@ var view = ( function () {
 
         var w = [];
 
-        var needScale = o.wheel==undefined ? true : false;
+        var needScale = o.wheel == undefined ? true : false;
 
         var gw = o.wheel || geo['wheel'];
         var gwr = gw.clone();
-        gwr.rotateY( Math.PI );
+        gwr.rotateY( Math.Pi );
         extraGeo.push( gwr );
 
         var i = o.nw || 4;
@@ -860,18 +969,119 @@ var view = ( function () {
             scene.add( w[i] );
         }
 
-        var car = { body:mesh, w:w, axe:helper.mesh, nw:o.nw || 4, helper:helper };
+        mesh.userData.w = w;
 
-        cars.push( car );
-        carsSpeed.push( 0 );
+        //var car = { body:mesh, w:w, axe:helper.mesh, nw:o.nw || 4, helper:helper, speed:0 };
+
+        cars.push( mesh );
+
+        mesh.userData.id = cars.length-1;
+        //carsSpeed.push( 0 );
+
+
 
         if( o.mesh ) o.mesh = null;
         if( o.wheel ) o.wheel = null;
+
+        if ( o.type == 'mesh' || o.type == 'convex' ) o.v = view.prepaGeometry( o.shape, o.type );
 
         // send to worker
         ammo.send( 'vehicle', o );
 
     };
+
+    //--------------------------------------
+    //   SOFT TRI MESH
+    //--------------------------------------
+
+    view.softTriMesh = function ( o ) {
+
+        //console.log(o.shape)
+
+        //if(o.shape.bones) 
+
+        var g = o.shape.clone();
+        var pos = o.pos || [0,0,0];
+        var size = o.size || [1,1,1];
+        var rot = o.rot || [0,0,0];
+
+        g.rotateX( rot[0] *= Math.degtorad );
+        g.rotateY( rot[1] *= Math.degtorad );
+        g.rotateZ( rot[2] *= Math.degtorad );
+
+        g.translate( pos[0], pos[1], pos[2] );
+        g.scale( size[0], size[1], size[2] );
+
+        //console.log('start', g.getIndex().count);
+
+        view.prepaGeometry(g);
+
+        extraGeo.push( g );
+
+        //console.log('mid', g.realIndices.length);
+
+        // extra color
+        /*var color = new Float32Array( g.maxi*3 );
+        var i = g.maxi*3;
+        while(i--){
+            color[i] = 1;
+        }
+        g.addAttribute( 'color', new THREE.BufferAttribute( color, 3 ) );*/
+
+        o.v = g.realVertices;
+        o.i = g.realIndices;
+        o.ntri = g.numFaces;
+
+
+
+
+        var mesh = new THREE.Mesh( g, o.material || mat.cloth );
+
+        o.shape = null;
+        o.material = null;
+
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        
+        mesh.softType = 5;
+
+        scene.add( mesh );
+        softs.push( mesh );
+
+        // send to worker
+        ammo.send( 'add', o );
+        
+    }
+
+    //--------------------------------------
+    //   SOFT CONVEX
+    //--------------------------------------
+
+    view.softConvex = function ( o ) {
+
+        var g = o.shape;
+        var pos = o.pos || [0,0,0];
+
+        g.translate( pos[0], pos[1], pos[2] );
+
+        view.prepaGeometry(g);
+
+        o.v = g.realVertices;
+
+        var mesh = new THREE.Mesh( g, mat.cloth );
+        
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        
+        mesh.softType = 4;
+
+        scene.add( mesh );
+        softs.push( mesh );
+
+        // send to worker
+        ammo.send( 'add', o );
+
+    }
 
     //--------------------------------------
     //   CLOTH
@@ -935,12 +1145,7 @@ var view = ( function () {
         //var n;
         //var pos = new Float32Array( max * 3 );
         for(var i=0; i<max-1; i++){
-            //n = i*3;
-            //pos[n] = start[0]; 
-            //pos[n+1] = start[1] + i * ((end[1]-start[1])/max); 
-            //pos[n+2] = start[2]; 
 
-            //if(i<max-1)
             ropeIndices.push( i, i + 1 );
 
         }
@@ -959,7 +1164,7 @@ var view = ( function () {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         mesh.softType = 2;
-        mesh.frustumCulled = false;
+        //mesh.frustumCulled = false;
 
         scene.add( mesh );
         softs.push( mesh );
@@ -1156,15 +1361,15 @@ var view = ( function () {
     view.setName = function ( o, mesh ) {
 
         if( o.name !== undefined ){ 
-            byName[name] = mesh;
-            mesh.name = name;
+            byName[o.name] = mesh;
+            mesh.name = o.name;
         }
 
     };
 
     view.getByName = function (name){
 
-        return byName[name];
+        return byName[name] || null;
 
     };
 
@@ -1175,188 +1380,216 @@ var view = ( function () {
     //
     //--------------------------------------
 
-    view.update = function(ar, dr, hr, jr, cr ){
+    view.update = function(){
 
-        var i = meshs.length, a = ar, n, m, j, w,k, l, c, cc, t, order;
+        this.bodyStep();
+        this.heroStep();
+        this.carsStep();
+        this.softStep();
 
-        meshs.forEach( function( m, id ) {
+    }
+
+    view.bodyStep = function(){
+
+        if( !meshs.length ) return;
+
+        meshs.forEach( function( b, id ) {
             var n = id * 8;
-            if ( a[n] > 0 ) {
-                if( a[n] > 50 && m.material.name == 'move' ) m.material = mat.movehigh;
-                else if(a[n] < 50 && m.material.name !== 'move') m.material = mat.move;
-                
-                m.position.set( a[n+1], a[n+2], a[n+3] );
-                m.quaternion.set( a[n+4], a[n+5], a[n+6], a[n+7] );
+            var s = Br[n];
+            if ( s > 0 ) {
 
-                if ( m.material.name == 'sleep' ) m.material = mat.move;
+                if ( b.material.name == 'sleep' ) b.material = mat.move;
+                if( s > 50 && b.material.name == 'move' ) b.material = mat.movehigh;
+                else if( s < 50 && b.material.name == 'movehigh') b.material = mat.move;
+                
+                b.position.set( Br[n+1], Br[n+2], Br[n+3] );
+                b.quaternion.set( Br[n+4], Br[n+5], Br[n+6], Br[n+7] );
 
             } else {
-                if ( m.material.name == 'move' || m.material.name == 'movehigh' ) m.material = mat.sleep;
+                if ( b.material.name == 'move' || b.material.name == 'movehigh' ) b.material = mat.sleep;
             }
         });
 
-        /*while(i--){
-            m = meshs[i];
-            n = i * 8;
+    };
 
-            if ( a[n] > 0 ) {
-                if( a[n] > 50 && m.material.name == 'move' ) m.material = mat.movehigh;
-                else if(a[n] < 50 && m.material.name !== 'move') m.material = mat.move;
-                
-                m.position.set( a[n+1], a[n+2], a[n+3] );
-                m.quaternion.set( a[n+4], a[n+5], a[n+6], a[n+7] );
+    view.heroStep = function(){
 
-                if ( m.material.name == 'sleep' ) m.material = mat.move;
+        if(heros.length == 0 ) return;
 
-            } else {
+        heros.forEach( function( b, id ) {
+            var n = id * 8;
+            b.userData.speed = Hr[n] * 100;
+            b.position.set( Hr[n+1], Hr[n+2], Hr[n+3] );
+            b.quaternion.set( Hr[n+4], Hr[n+5], Hr[n+6], Hr[n+7] );
+        });
 
-                if ( m.material.name == 'move' || m.material.name == 'movehigh' ) m.material = mat.sleep;
+    };
+
+    view.carsStep = function(){
+
+        if( !cars.length ) return;
+
+        cars.forEach( function( b, id ) {
+            var n = id * 56;
+            //carsSpeed[id] = Cr[n];
+            b.userData.speed = Cr[n];
+
+            b.position.set( Cr[n+1], Cr[n+2], Cr[n+3] );
+            b.quaternion.set( Cr[n+4], Cr[n+5], Cr[n+6], Cr[n+7] );
+
+            //b.axe.position.copy( b.body.position );
+            //b.axe.quaternion.copy( b.body.quaternion );
+
+            var j = b.userData.NumWheels, w;
+
+            if(b.userData.helper){
+                if( j == 4 ){
+                    w = 8 * ( 4 + 1 );
+                    b.userData.helper.updateSuspension(Cr[n+w+0], Cr[n+w+1], Cr[n+w+2], Cr[n+w+3]);
+                }
+            }
             
-            }
-
-        }*/
-
-        // updtae character
-        i = heros.length;
-        a = hr;
-
-        while(i--){
-            m = heros[i];
-            n = i * 8;
-
-            m.position.set( a[n+1], a[n+2], a[n+3] );
-            m.quaternion.set( a[n+4], a[n+5], a[n+6], a[n+7] );
-
-        }
-
-        // update car
-        i = cars.length;
-        a = dr;
-
-        while(i--){
-            m = cars[i];
-            n = i * 56;
-
-            carsSpeed[i] = a[n];
-
-            m.body.position.set( a[n+1], a[n+2], a[n+3] );
-            m.body.quaternion.set( a[n+4], a[n+5], a[n+6], a[n+7] );
-
-            m.axe.quaternion.copy( m.body.quaternion );
-
-           
-
-            j = m.nw;//a[n+8];
-
-            if(j==4){
-                w = 8 * ( 4 + 1 );
-                m.helper.updateSuspension(a[n+w+0], a[n+w+1], a[n+w+2], a[n+w+3]);
-            }
             while(j--){
 
                 w = 8 * ( j + 1 );
                 //if( j == 1 ) steering = a[n+w];// for drive wheel
-                if( j == 1 ) m.axe.position.x = a[n+w];
-                if( j == 2 ) m.axe.position.y = a[n+w];
-                if( j == 3 ) m.axe.position.z = a[n+w];
+                //if( j == 1 ) b.axe.position.x = Cr[n+w];
+                //if( j == 2 ) b.axe.position.y = Cr[n+w];
+                //if( j == 3 ) b.axe.position.z = Cr[n+w];
 
-                m.w[j].position.set( a[n+w+1], a[n+w+2], a[n+w+3] );
-                m.w[j].quaternion.set( a[n+w+4], a[n+w+5], a[n+w+6], a[n+w+7] );
-
+                b.userData.w[j].position.set( Cr[n+w+1], Cr[n+w+2], Cr[n+w+3] );
+                b.userData.w[j].quaternion.set( Cr[n+w+4], Cr[n+w+5], Cr[n+w+6], Cr[n+w+7] );
             }
+        });
 
-        }
+    };
 
-        // update cloth
-        l = softs.length;
-        a = cr;
-        w = 0;
-        k = 0;
+    view.softStep = function(){
 
-        //while(i--){
+        if( !softs.length ) return;
 
-        for( i = 0; i<l; i++ ){
+        var softPoints = 0;
 
-            m = softs[i];
-            t = m.softType; // type of softBody
-            order = null;
+        softs.forEach( function( b, id ) {
 
-            p = m.geometry.attributes.position.array;
-            c = m.geometry.attributes.color.array;
-            if( m.geometry.attributes.order ) order = m.geometry.attributes.order.array;
-            j = p.length;
+            var n, c, cc, p, j, k;
 
-            n = 2;
+            var t = b.softType; // type of softBody
+            var order = null;
+            var isWithColor = b.geometry.attributes.color ? true : false;
+            var isWithNormal = b.geometry.attributes.normal ? true : false;
 
-            if(order!==null) {
-                j = order.length;
+            p = b.geometry.attributes.position.array;
+            if(isWithColor) c = b.geometry.attributes.color.array;
+
+            if( t == 5 || t == 4 ){ // softTriMesh // softConvex
+
+                var max = b.geometry.numVertices;
+                var maxi = b.geometry.maxi;
+                var pPoint = b.geometry.pPoint;
+                var lPoint = b.geometry.lPoint;
+
+                j = max;
                 while(j--){
-                    k = order[j] * 3;
-                    n = j*3 + w;
-                    p[k] = a[n];
-                    p[k+1] = a[n+1];
-                    p[k+2] = a[n+2];
-
-                    cc = Math.abs(a[n+1]/10);
-                    c[k] = cc;
-                    c[k+1] = cc;
-                    c[k+2] = cc;
-
-
+                    n = (j*3) + softPoints;
+                    if( j == max-1 ) k = maxi - pPoint[j];
+                    else k = pPoint[j+1] - pPoint[j];
+                    var d = pPoint[j];
+                    while(k--){
+                        var id = lPoint[d+k]*3;
+                        p[id] = Sr[n];
+                        p[id+1] = Sr[n+1]; 
+                        p[id+2] = Sr[n+2];
+                    }
                 }
 
-            } else {
-                 while(j--){
-                     
-                    p[j] = a[j+w];
-                    if(n==1){ 
-                        cc = Math.abs(p[j]/10);
-                        c[j-1] = cc;
-                        c[j] = cc;
-                        c[j+1] = cc;
+            }else{
+
+
+                if( b.geometry.attributes.order ) order = b.geometry.attributes.order.array;
+                //if( m.geometry.attributes.same ) same = m.geometry.attributes.same.array;
+                j = p.length;
+
+                n = 2;
+
+                if(order!==null) {
+                    j = order.length;
+                    while(j--){
+                        k = order[j] * 3;
+                        n = j*3 + softPoints;
+                        p[k] = Sr[n];
+                        p[k+1] = Sr[n+1];
+                        p[k+2] = Sr[n+2];
+
+                        cc = Math.abs(Sr[n+1]/10);
+                        c[k] = cc;
+                        c[k+1] = cc;
+                        c[k+2] = cc;
                     }
-                    n--;
-                    n = n<0 ? 2 : n;
+
+                } else {
+                     while(j--){
+                         
+                        p[j] = Sr[j+softPoints];
+                        if(n==1){ 
+                            cc = Math.abs(p[j]/10);
+                            c[j-1] = cc;
+                            c[j] = cc;
+                            c[j+1] = cc;
+                        }
+                        n--;
+                        n = n<0 ? 2 : n;
+                    }
+
                 }
 
             }
+
+            if(t!==2) b.geometry.computeVertexNormals();
+
+            b.geometry.attributes.position.needsUpdate = true;
+
+            if(isWithNormal){
+
+                var norm = b.geometry.attributes.normal.array;
+
+                j = max;
+                while(j--){
+                    if( j == max-1 ) k = maxi - pPoint[j];
+                    else k = pPoint[j+1] - pPoint[j];
+                    var d = pPoint[j];
+                    var ref = lPoint[d]*3;
+                    while(k--){
+                        var id = lPoint[d+k]*3;
+                        norm[id] = norm[ref];
+                        norm[id+1] = norm[ref+1]; 
+                        norm[id+2] = norm[ref+2];
+                    }
+                }
+
+                b.geometry.attributes.normal.needsUpdate = true;
+            }
+
+            if(isWithColor) b.geometry.attributes.color.needsUpdate = true;
             
-           
+            b.geometry.computeBoundingSphere();
 
-            m.geometry.attributes.position.needsUpdate = true;
-            m.geometry.attributes.color.needsUpdate = true;
-            if(t==1 || t==3) m.geometry.computeVertexNormals();
-            m.geometry.computeBoundingSphere();
-
-            w += p.length;
-
-        }
+            if( t == 5 ) softPoints += b.geometry.numVertices * 3;
+            else softPoints += p.length;
+        });
 
     };
+    
 
-    view.setLeft = function ( x ) { vs.x = x; };
 
-    view.tell = function ( str ) { debug.innerHTML = str; };
 
-    view.resize = function () {
 
-        vs.h = window.innerHeight;
-        vs.w = window.innerWidth - vs.x;
 
-        debug.style.left = vs.x +'px';
-        canvas.style.left = vs.x +'px';
-        camera.aspect = vs.w / vs.h;
-        camera.updateProjectionMatrix();
-        renderer.setSize( vs.w, vs.h );
 
-    };
 
-    view.render = function () {
 
-        if( isCamFollow ) this.follow();
-        renderer.render( scene, camera );
 
-    };
+    
 
     //--------------------------------------
     //   SHADOW
@@ -1384,7 +1617,7 @@ var view = ( function () {
 
     view.addShadow = function(){
 
-        if(isWithShadow) return;
+       if(isWithShadow) return;
 
         isWithShadow = true;
         renderer.shadowMap.enabled = true;
@@ -1393,7 +1626,7 @@ var view = ( function () {
         renderer.shadowMap.cullFace = THREE.CullFaceBack;
 
         if(!terrains.length){
-            shadowGround = new THREE.Mesh( new THREE.PlaneBufferGeometry( 200, 200, 1, 1 ), new THREE.MeshBasicMaterial({ color:0X070707 }) );
+            shadowGround = new THREE.Mesh( new THREE.PlaneBufferGeometry( 200, 200, 1, 1 ), TransparentShadow(0x040205, 0.5) );
             shadowGround.geometry.applyMatrix(new THREE.Matrix4().makeRotationX(-Math.PI*0.5));
             shadowGround.position.y = spy;
             shadowGround.castShadow = false;
@@ -1444,75 +1677,6 @@ var view = ( function () {
 
 
     }
-
-    //--------------------------------------
-    //
-    //   CAR HELPER
-    //
-    //--------------------------------------
-
-    var carHelper = function ( p ) {
-
-        var s = 0.2;
-        var d = 0.5;
-
-        this.py = p[1];
-
-        var vertices = new Float32Array( [
-            -s, 0, 0,  s, 0, 0,
-            0, 0, 0,  0, s*2, 0,
-            0, 0, -s,  0, 0, s,
-
-            p[0]*d, p[1], p[2],    p[0]*d, p[1]+1, p[2],
-            -p[0]*d, p[1], p[2],   -p[0]*d, p[1]+1, p[2],
-            -p[0]*d, p[1],-p[2],   -p[0]*d, p[1]+1, -p[2],
-            p[0]*d, p[1], -p[2],    p[0]*d, p[1]+1, -p[2],
-        ] );
-
-        var colors = new Float32Array( [
-            1, 1, 0,  1, 1, 0,
-            1, 1, 0,  0, 1, 0,
-            1, 1, 0,  1, 1, 0,
-
-            1,1,0,    1,1,0,
-            1,1,0,    1,1,0,
-            1,1,0,    1,1,0,
-            1,1,0,    1,1,0,
-        ] );
-
-        var geometry = new THREE.BufferGeometry();
-        geometry.addAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
-        geometry.addAttribute( 'color', new THREE.BufferAttribute( colors, 3 ) );
-
-        this.positions = geometry.attributes.position.array;
-
-        var material = new THREE.LineBasicMaterial( { vertexColors: THREE.VertexColors } );
-
-        this.mesh = new THREE.LineSegments( geometry, material);
-
-    }
-
-    carHelper.prototype = {
-
-        updateSuspension : function ( s0, s1, s2, s3 ) {
-
-            this.positions[22] = this.py-s0;
-            this.positions[28] = this.py-s1;
-            this.positions[34] = this.py-s2;
-            this.positions[40] = this.py-s3;
-
-            this.mesh.geometry.attributes.position.needsUpdate = true;
-
-        },
-        clear : function(){
-
-            this.mesh.geometry.dispose();
-            this.mesh.material.dispose();
-            this.mesh = null;
-
-        }
-
-    };
 
     return view;
 

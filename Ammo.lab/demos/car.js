@@ -13,14 +13,16 @@ function afterLoad () {
 
     add({type:'plane', friction:0.6, restitution:0.1 }); // infinie plane
 
-    add({ type:'track', shape:'mesh', size:[1,1,1], pos:[0,0,0], mass:0, friction:0.6, restitution:0.1 });
+    add({ type:'mesh', shape:view.getGeo()['track'], mass:0, friction:0.6, restitution:0.1 });
 
     // ammo car shape
 
     // ! \\ go on view and use keyboard to controle car
 
     car ({ 
-        type:'box', 
+        type:'box',
+        name:'car',
+        helper: true,
         pos:[0,1,0], // start position of car 
         rot:[0,90,0], // start rotation of car
         size:[ 1.6, 0.4, 3.6 ], // chassis size
@@ -62,11 +64,11 @@ function afterLoad () {
         // roll: reduces torque from the wheels
         // reducing vehicle barrel chance
         // 0 - no torque, 1 - the actual physical behavior
-        w_roll: 0.01
+        w_roll: 0.01,
+
 
     });
 
-    view.setDriveCar( 0 );
-    view.activeFollow();
+    follow ('car');
 
 };

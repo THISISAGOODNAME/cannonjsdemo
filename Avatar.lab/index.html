@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Avatar lab</title>
+<meta name="Description" content="" />
+<meta name="Keywords"  content="" />
+<style>
+* { margin: 0; padding: 0; border: 0; -webkit-user-select: none; -khtml-user-select: none; -moz-user-select: -moz-none; -o-user-select: none; user-select: none; }
+body { 
+    background: #000; 
+    font-family: "Lucida Console", Monaco, monospace;
+    font-size: 11px; 
+    color:#fff; 
+    text-shadow:1px 1px 0px #000; 
+    overflow:hidden; 
+}
+canvas { position: absolute; top:0; left:0; pointer-events:auto; width:100%; height:100%; }
+#container { position:absolute; top:0; left:0; }
+#guiContener { position:absolute; overflow-x:auto; height:100%; width:215px; top: 0; left: 0;}
+#out2 { position:absolute; bottom:50px; right:6px; text-align: right; pointer-events:none; line-height: 14px; }
+#out1 { position:absolute; bottom:50px; left:6px; text-align: left; pointer-events:none; line-height: 14px; }
+
+#debug { position:absolute; top:6px; left:100px; text-align:left; pointer-events:none;}
+#b1 { position:absolute; top:70px; left:6px; width:50px; height:20px; border:1px solid #ccc; cursor:pointer; }
+#b2 { position:absolute; top:70px; left:66px; width:50px; height:20px; border:1px solid #ccc; cursor:pointer; }
+
+#b3 { position:absolute; top:6px; right:6px; width:90px; height:20px; border:1px solid #ccc; cursor:pointer; }
+#b4 { position:absolute; top:36px; right:6px; width:90px; height:20px; border:1px solid #ccc; cursor:pointer; }
+#b5 { position:absolute; top:66px; right:6px; width:90px; height:20px; border:1px solid #ccc; cursor:pointer; }
+#b6 { position:absolute; top:96px; right:6px; width:90px; height:20px; border:1px solid #ccc; cursor:pointer; }
+#b7 { position:absolute; top:126px; right:6px; width:90px; height:20px; border:1px solid #ccc; cursor:pointer;}
+#b8 { position:absolute; top:156px; right:6px; width:90px; height:20px; border:1px solid #ccc; cursor:pointer;}
+</style>
+</head>
+<body>
+<!-- Copyright Lo-Th -->
+<script src="js/extract.js"></script>
+<script src="js/three.min.js"></script>
+<script src="js/Stats.js"></script>
+
+<script src="js/postprocessing/EffectComposer.js"></script>
+<script src="js/postprocessing/RenderPass.js"></script>
+<script src="js/postprocessing/ShaderPass.js"></script>
+<script src="js/postprocessing/MaskPass.js"></script>
+<script src="js/postprocessing/BloomPass.js"></script>
+<script src="js/postprocessing/BokehPass.js"></script>
+<script src="js/postprocessing/EffectComposer.js"></script>
+
+<script src="js/shaders/CopyShader.js"></script>
+<script src="js/shaders/SSAOShader.js"></script>
+<script src="js/shaders/ColorCorrectionShader.js"></script>
+<script src="js/shaders/VignetteShader.js"></script>
+<script src="js/shaders/HorizontalBlurShader.js"></script>
+<script src="js/shaders/VerticalBlurShader.js"></script>
+<script src="js/shaders/ConvolutionShader.js"></script>
+<script src="js/shaders/BokehShader2.js"></script>
+
+<script src="js/OrbitControls.js"></script>
+
+<script src="js/MorphAnimMesh.js"></script>
+<script src="js/loaders/collada/Animation.js"></script>
+<script src="js/loaders/collada/AnimationHandler.js"></script>
+<!--<script src="js/loaders/collada/KeyFrameAnimation.js"></script>-->
+<script src="js/loaders/sea3d/SEA3D.js"></script>
+<script src="js/loaders/sea3d/SEA3DLoader.js"></script>
+<script src="js/loaders/sea3d/SEA3DLegacy.js"></script>
+<script src="js/loaders/sea3d/SEA3DLZMA.js"></script>
+
+<script src="js/bvh.js"></script>
+<script src="js/loadordrag.js"></script>
+<script src="js/Avatar.js"></script>
+
+<canvas id="canvas"></canvas>
+<div id="debug"></div>
+<!--<input type="file" id="files" />-->
+<input type="submit" value="action" id="b1">
+<input type="submit" value="story" id="b2">
+<input type="submit" value="hide model" id="b3">
+<input type="submit" value="show skeleton" id="b4">
+<input type="submit" value="show physics" id="b5">
+<input type="submit" value="show helper" id="b6">
+
+<input type="submit" value="Man/Woman" id="b7">
+<input type="submit" value="postEffect" id="b8">
+
+<div id="BVHhubs"></div>
+<div id="out1"></div>
+<div id="out2"></div>
+
+<script>
+window.onload = init;
+
+//var bodyLink = "models/avatar_low.sea";
+var bodyLink = "models/avatar.sea";
+
+var avatar;
+
+var isTJS = false;
+
+var out1, out2, debug, loadordrag, stats, clock;
+var vsize, camPos, mouse;
+var camera, canvas, scene, renderer, delta, center, centerLight, clock, controls, textureLoader, envmap, back, ground;
+var composer, ssaoPass, depthMaterial, depthRenderTarget;
+var ToRad = Math.PI / 180;
+var ToDeg = 180 / Math.PI;
+
+var isWithPosEffect = false;
+var isPostInitialised = false;
+
+var isShadow = true;
+
+// bvh var
+var bvhReader = null;
+var BVHanimConfig = { debug:true, speed:0.5, size:1, px:0, py:0, pz:0, boneSize:0.4, visible:false };
+
+
+
+
+function init() {
+
+    out1 = document.getElementById("ou1");
+    out2 = document.getElementById("out2");
+    debug = document.getElementById("debug");
+
+    document.getElementById("b1").addEventListener( 'click', function ( e ) { BVHanimConfig.speed=0.5; loadBVH("bvh/action.z"); }, false );
+    document.getElementById("b2").addEventListener( 'click', function ( e ) { BVHanimConfig.speed=1; loadBVH("bvh/story.z"); }, false ); 
+    document.getElementById("b3").addEventListener( 'click', function ( e ) { heroVisibility(); }, false );
+    document.getElementById("b4").addEventListener( 'click', function ( e ) { skeletonVisibility(); }, false );
+    document.getElementById("b5").addEventListener( 'click', function ( e ) { physicsVisibility(); }, false );
+    document.getElementById("b6").addEventListener( 'click', function ( e ) { helperVisibility(); }, false );
+    document.getElementById("b7").addEventListener( 'click', function ( e ) { switchGender(); }, false );
+    document.getElementById("b8").addEventListener( 'click', function ( e ) { if(isWithPosEffect) isWithPosEffect = false; else { if(!isPostInitialised)initPostEffect(); isWithPosEffect = true;} }, false );
+    
+    vsize = new THREE.Vector3(window.innerWidth, window.innerHeight, 0);
+    vsize.z = vsize.x / vsize.y;
+    
+    init3D();
+    animate();
+
+}
+
+function handleFileSelect(evt) {
+    var f = evt.target.files[0];
+    var reader = new FileReader();
+    reader.onload = (function(theFile) { return function(e) { bvhReader.parseData(e.target.result.split(/\s+/g));}; })(f);
+    reader.readAsText(f);
+}
+
+function debugTell(s) {
+    debug.innerHTML = s;
+}
+
+function init3D() {
+
+    clock = new THREE.Clock();
+
+    canvas = document.getElementById( 'canvas' );
+    clock = new THREE.Clock();
+    
+    renderer = new THREE.WebGLRenderer({ canvas:canvas, antialias: true , logarithmicDepthBuffer: false });
+    renderer.setSize( vsize.x, vsize.y );
+
+    if(isShadow){
+        renderer.shadowMap.enabled = true;
+        //renderer.shadowMap.soft = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.shadowMap.cullFace = THREE.CullFaceBack;
+    }
+    
+
+    renderer.gammaInput = true;
+    renderer.gammaOutput = true;
+
+    scene = new THREE.Scene();
+    
+    camera = new THREE.PerspectiveCamera( 35, vsize.z, 0.1, 2000 );
+    camera.position.set(0,60,200);
+
+    controls = new THREE.OrbitControls( camera, canvas );
+    controls.target.set(0,40,0);
+    controls.update();
+
+    textureLoader = new THREE.TextureLoader();
+    //textureLoader.addEventListener('load', textureComplete );
+
+    
+
+    
+    //mapn.wrapT = THREE.MirroredRepeatWrapping
+
+    
+    //maps.flipY = false;
+
+    
+    scene.add( new THREE.AmbientLight( 0x404040 ) );
+    
+    var light = new THREE.SpotLight( 0xFFFFFF, 1.8, 0, Math.PI/2, 1 );
+    //var light = new THREE.DirectionalLight( 0xFFFFFF, 1.8 );
+    //var light = new THREE.PointLight( 0xFFFFFF, 1.8, 1000 );
+
+    light.position.set(100,500,100);
+    light.lookAt(new THREE.Vector3(0,20,0));
+
+    if(isShadow){
+
+        light.castShadow = true;
+        light.shadowCameraNear = 100;
+        light.shadowCameraFar = 800;
+        light.shadowCameraFov = 50;
+        light.shadowBias = -0.005;
+        //light.shadowMapWidth = light.shadowMapHeight = 2048;
+
+    }
+
+    scene.add( light );
+
+    /*var light1 = new THREE.SpotLight( 0x334480, 0.6, 0, Math.PI/2, 1 );
+    light1.position.set(-300, 1, -300);
+    light1.lookAt(new THREE.Vector3(0,20,0));
+    scene.add( light1 );
+
+    var light2 = new THREE.SpotLight( 0x554433, 0.4, 0, Math.PI/2, 1 );
+    light2.position.set(300, 100, 300);
+    light2.lookAt(new THREE.Vector3(0,20,0));
+    scene.add( light2 );*/
+
+    var pointLight = new THREE.PointLight( 0x334455, 0.2, 1000 );
+    pointLight.position.set(-100, 10, -300)
+    scene.add( pointLight );
+
+    var pointLight2 = new THREE.PointLight( 0x554433, 0.1, 1000 );
+    pointLight2.position.set(300, 50, 100)
+    scene.add( pointLight2 );
+
+
+
+
+    //var bgmaps = textureLoader.load( 'textures/bg.png' );
+    //back = new THREE.Mesh( new THREE.IcosahedronGeometry(300,3), new THREE.MeshBasicMaterial( { map:bgmaps, side:THREE.BackSide, depthWrite: false, depthTest: false }  ));
+    //scene.add( back );
+
+    back = new THREE.Mesh( new THREE.IcosahedronGeometry(300,3), new THREE.MeshPhongMaterial( { color: 0xFFFFFF, side:THREE.BackSide, depthWrite: false, depthTest: false }  ));
+    scene.add( back );
+    
+    //var groundMaterial = new THREE.MeshBasicMaterial( { color: 0xFFFFFF, transparent: true, blending:THREE.MultiplyBlending } );
+    var groundMaterial = new THREE.MeshPhongMaterial( { color: 0xFFFFFF, transparent: true, blending:THREE.MultiplyBlending } );
+    ground = new THREE.Mesh(new THREE.PlaneGeometry( 800, 800, 4, 4 ), groundMaterial);
+    ground.position.set( 0, 0, 0 );
+    ground.rotation.x = - Math.PI / 2;
+
+    ground.castShadow = false;
+    ground.receiveShadow = true;
+
+    scene.add( ground );
+
+    // post-processing
+    //if(isWithPosEffect) 
+     //   initPostEffect();
+    
+
+    stats = new Stats();
+    stats.domElement.style.position = 'absolute';
+    stats.domElement.style.top = '0px';
+    document.body.appendChild( stats.domElement );
+
+
+    window.addEventListener( 'resize', resize, false );
+
+    initBVH();
+    loadSea3dBody();
+
+}
+
+function initPostEffect(){
+
+    composer = new THREE.EffectComposer( renderer );
+    composer.setSize( window.innerWidth, window.innerHeight );
+
+    var renderPass = new THREE.RenderPass( scene, camera );
+    var copyPass = new THREE.ShaderPass( THREE.CopyShader );
+    //composer.addPass( renderPass );
+
+    // Setup depth pass
+    avatar.initDepth();
+    /*
+    var depthShader = THREE.ShaderLib[ "depthRGBA" ];
+    var depthUniforms = THREE.UniformsUtils.clone( depthShader.uniforms );
+
+    depthMaterial = new THREE.ShaderMaterial( { fragmentShader: depthShader.fragmentShader, vertexShader: depthShader.vertexShader,
+        uniforms: depthUniforms, blending: THREE.NoBlending, skinning: true, morphTargets:true } );*/
+
+    var pars = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
+    depthRenderTarget = new THREE.WebGLRenderTarget( window.innerWidth, window.innerHeight, pars );
+
+    // Setup SSAO pass
+    ssaoPass = new THREE.ShaderPass( THREE.SSAOShader );
+    ssaoPass.renderToScreen = true;
+    //ssaoPass.uniforms[ "tDiffuse" ].value will be set by ShaderPass
+    ssaoPass.uniforms[ "tDepth" ].value = depthRenderTarget;
+    ssaoPass.uniforms[ 'size' ].value.set( window.innerWidth, window.innerHeight );
+    ssaoPass.uniforms[ 'cameraNear' ].value = camera.near;
+    ssaoPass.uniforms[ 'cameraFar' ].value = camera.far;
+    ssaoPass.uniforms[ 'onlyAO' ].value = 0;//( composer.renderMode == 1 );
+    ssaoPass.uniforms[ 'aoClamp' ].value = 0.5;//3;
+    ssaoPass.uniforms[ 'lumInfluence' ].value = 1;//0.5;
+
+    var vh = 1.4, vl = 1.2;
+
+    var colorCorrectionPass = new THREE.ShaderPass( THREE.ColorCorrectionShader );
+    colorCorrectionPass.uniforms[ "powRGB" ].value = new THREE.Vector3( vh, vh, vh );
+    colorCorrectionPass.uniforms[ "mulRGB" ].value = new THREE.Vector3( vl, vl, vl );
+
+    var vignettePass = new THREE.ShaderPass( THREE.VignetteShader );
+    vignettePass.uniforms[ "darkness" ].value = 1;
+
+    var effectHBlur = new THREE.ShaderPass( THREE.HorizontalBlurShader );
+    var effectVBlur = new THREE.ShaderPass( THREE.VerticalBlurShader );
+    effectHBlur.uniforms[ 'h' ].value = 1 / window.innerWidth;
+    effectVBlur.uniforms[ 'v' ].value = 1 / window.innerHeight;
+
+    //effectHBlur.uniforms[ 'tDiffuse' ].value = depthRenderTarget;
+    //effectVBlur.uniforms[ 'tDiffuse' ].value = depthRenderTarget;
+
+    var effectBloom = new THREE.BloomPass( 0.6 );
+
+    var clearMask = new THREE.ClearMaskPass();
+
+    /*var bokehPass = new THREE.BokehPass( scene, camera, {
+                    focus:      0.01,
+                    aperture:   0.05,
+                    maxblur:    0.1,
+
+                    width: window.innerWidth ,
+                    height: window.innerHeight
+                } );*/
+    
+
+    
+
+   // Add pass to effect composer
+   // effectComposer = new THREE.EffectComposer( renderer );
+
+    composer.addPass( renderPass );
+    
+    //composer.addPass( colorCorrectionPass );
+    composer.addPass( vignettePass );
+    //composer.addPass( copyPass );
+    composer.addPass( ssaoPass );
+    composer.addPass( effectBloom )
+    //composer.addPass( bokehPass )
+    composer.addPass( effectHBlur );
+    composer.addPass( effectVBlur );
+    composer.addPass( clearMask );
+    //composer.addPass( renderPass );
+    //
+    
+    //
+    //copyPass.renderToScreen = true;
+
+    clearMask.renderToScreen = true;
+
+    isPostInitialised = true;
+
+
+}
+
+function animate() {
+
+    var delta = clock.getDelta();
+
+    requestAnimationFrame( animate );
+
+    if(avatar) avatar.updateAnimation(delta);
+
+    if(bvhReader !== null) bvhReader.update();
+
+    if(isWithPosEffect){
+        if(avatar) avatar.depthPass();
+
+        //scene.overrideMaterial = depthMaterial;
+        if(back) back.visible = false; 
+        if(ground) ground.visible = false;
+        //if(avatar.eyeGroup) avatar.eyeGroup.visible = false;
+
+        renderer.render( scene, camera, depthRenderTarget, true );
+        if(back) back.visible = true; 
+        if(ground) ground.visible = true;
+        //if(avatar.eyeGroup) avatar.eyeGroup.visible = true;
+
+        if(avatar) avatar.normalPass();
+
+        // Render renderPass and SSAO shaderPass
+        //scene.overrideMaterial = null;
+        composer.render();
+    } else {
+
+        renderer.render( scene, camera );
+
+    }
+    
+    stats.update();
+}
+
+function resize( event ) {
+    vsize.x = window.innerWidth;
+    vsize.y = window.innerHeight;
+    vsize.z = vsize.x / vsize.y;
+    camera.aspect = vsize.z;
+    camera.updateProjectionMatrix();
+
+    // Resize renderTargets
+    if( isWithPosEffect ){
+        ssaoPass.uniforms[ 'size' ].value.set( vsize.x, vsize.y );
+        depthRenderTarget.setSize( vsize.x, vsize.y );
+        composer.setSize(vsize.x, vsize.y );
+    }
+    renderer.setSize( vsize.x, vsize.y );
+}
+
+
+//===============================================
+//  INIT BVH
+//===============================================
+
+
+function initBVH() {
+
+    bvhReader = new BVH.Reader();
+    loadordrag = new LoadorDrag( function(r,fname) {bvhReader.read(r,fname);}, true );
+    loadBVH("bvh/action.z");
+
+}
+
+function loadBVH(file) {
+
+    bvhReader.boneSize = BVHanimConfig.boneSize;
+    bvhReader.speed = BVHanimConfig.speed;
+    bvhReader.load(file);
+
+}
+
+function updateBVH() {
+
+    avatar.updateBones();
+    
+}
+
+function skeletonVisibility() {
+    if( bvhReader.skeleton.visible){ bvhReader.skeleton.visible=false; document.getElementById("b4").value = "show skeleton"}
+    else{ bvhReader.skeleton.visible = true; document.getElementById("b4").value = "hide skeleton";}
+}
+
+//===============================================
+//  SEA3D
+//===============================================
+
+function loadSea3dBody(){
+
+    var geos = {};
+
+    avatar = new THREE.Avatar();
+    
+    var loader = new THREE.SEA3D();
+    loader.onComplete = function( e ) {
+
+        var i = loader.meshes.length, m;
+        while(i--){
+            if(loader.meshes[i].name == 'man') geos['man'] = loader.meshes[i].geometry;
+            if(loader.meshes[i].name == 'woman') geos['woman'] = loader.meshes[i].geometry;
+            if(loader.meshes[i].name == 'eye') geos['eye'] = loader.meshes[i].geometry;
+        }
+
+        reversUV( geos['woman'] );
+        reversUV( geos['man'] );
+
+        avatar.init( geos, bvhReader );
+        scene.add( avatar );
+
+        /**/
+
+        loadMap()
+
+        console.log( "SEA3D Loaded:", loader.file.timer.elapsedTime + "ms" );
+    }
+
+    loader.load( bodyLink );
+
+}
+
+function loadMap(){
+
+    textureLoader.load( 'textures/bg.png', textureComplete );
+    textureLoader.load( 'textures/avatar.jpg', textureComplete );
+    textureLoader.load( 'textures/avatar_n.jpg', textureComplete );
+    textureLoader.load( 'textures/eye.png', textureComplete );
+    textureLoader.load( 'textures/eye_n.png', textureComplete );
+    textureLoader.load( 'textures/red.jpg', textureComplete );
+
+};
+
+function textureComplete( tex ){
+
+    var name = tex.image.currentSrc.substring(tex.image.currentSrc.lastIndexOf('/')+1, tex.image.currentSrc.lastIndexOf('.'));
+    tex.name = name;
+
+    if(name === 'bg'){ 
+        back.material.map = tex;
+        back.material.needsUpdate = true;
+    }
+
+    if(name === 'avatar'){
+        tex.flipY = false;
+        tex.wrapS = THREE.MirroredRepeatWrapping;
+        avatar.normalMaterial.map = tex;
+        avatar.normalMaterial.needsUpdate = true;
+    }
+
+    if(name === 'avatar_n'){
+        tex.flipY = false;
+        tex.wrapS = THREE.MirroredRepeatWrapping;
+        avatar.normalMaterial.normalMap = tex;
+        avatar.normalMaterial.needsUpdate = true;
+    }
+
+    if(name === 'eye'){ 
+        avatar.eyeMaterial.map = tex;
+        avatar.eyeMaterial.needsUpdate = true;
+    }
+
+    if(name === 'eye_n'){ 
+        avatar.eyeMaterial.normalMap = tex;
+        avatar.eyeMaterial.needsUpdate = true;
+    }
+
+    if(name === 'red'){ 
+        tex.mapping = THREE.SphericalReflectionMapping;
+        avatar.normalMaterial.envMap = tex;
+        avatar.normalMaterial.needsUpdate = true;
+        avatar.eyeMaterial.envMap = tex;
+        avatar.eyeMaterial.needsUpdate = true;
+    }
+
+};
+
+function reversUV( geometry ){
+
+    var uv = geometry.attributes.uv.array;
+    var i = uv.length * 0.25;
+    while( i-- ) uv[i*2]*=-1;
+    geometry.attributes.uv.needsUpdate = true;
+
+};
+
+function switchGender(){
+
+    avatar.switchGender();
+
+};
+
+function helperVisibility(){
+    if(avatar.helper == null) avatar.addHelper();
+    else avatar.removeHelper();
+
+};
+
+function heroVisibility() {
+
+    if(avatar.visible){ avatar.visible=false; document.getElementById("b3").value = "show model"}
+    else{ avatar.visible=true; document.getElementById("b3").value = "hide model";}
+
+};
+
+
+</script>
+</body>
+</html>

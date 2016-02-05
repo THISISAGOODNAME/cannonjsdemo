@@ -11,14 +11,14 @@
 }
 
 html, body {
-	font-family: monospace;
+	font-family: "Lucida Console", Monaco, monospace;
 	font-size: 11px;
     font-style: normal;
     font-variant: normal;
     font-weight: 400;
     /*line-height: 23px;*/
     height:100%;
-    background:#2A2A2A;
+    background:#2B2A2D;
     color:#dedede;
     /*color:#d2cec8;text-shadow: 1px 1px 1px rgba(0,0,0,0.3);*/
     overflow:hidden;
@@ -28,21 +28,92 @@ html, body {
     /*text-shadow: 0.5px 0.5px 2px #000000;*/
 }
 
-/*body{
-    background-image: url(../textures/bg.png);
-    background-repeat: repeat-x;
-}
-body{
-    background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAAAAACMmsGiAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAABdJREFUCB1jUlGRkWH6CQRMf//y8oJZAFUaCmUwcfODAAAAAElFTkSuQmCC);
-}*/
+@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}
+#octo-arm{pointer-events:none;}
+#octo-body{pointer-events:none;}
+#octo{cursor:pointer;pointer-events:auto;}
 
-#canvas3d { 
+.canvas3d { 
     position: absolute; top:0; left:0; pointer-events:auto; width:100%; height:100%; 
 }
 
-#debug {
+.bigmenu {
+    position: absolute;
+    padding-top:40px;
+    background: rgba(0,0,0,0);
+    transition:background 0.3s ease;
+    border-bottom:  1px solid rgba(255, 255, 255, 0);
+    transition:border 0.3s ease;
+}
+
+.bigContent {
+    padding: 10px 40px;
+    width:100%;
+    display: block;
+}
+
+.menuButtonBig{
+
+    font-size: 11px;
+    font-weight: 500;
+    height: 30px;
+    padding: 4px;
+    padding-top: 10px;
+    background: none;
+    pointer-events:auto;
+    cursor: pointer;
+    /*background:#0d0d0d;*/
+    text-align: left;
+    display: inline-block;
+    width:110px;
+    transition:color 0.3s ease;
+
+}
+
+.menuButtonBig:hover{
+    color:#308AFF;
+}
+
+.bigButton {
+    
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    width:70px;
+    height:18px;
+    font-size: 16px;
+    font-weight: 500;
+    text-align: center;
+    pointer-events:auto;
+    cursor:pointer;
+    display: inline-block;
+    margin-left: 40px;
+    margin-right: -20px;
+    transition:all 0.3s ease;
+}
+
+.debug {
+    font-size: 9px;
     position:absolute;
-    padding: 10px 10px;
+    padding-left: 40px;
+    bottom: 40px;
+}
+
+.title {
+    position:absolute;
+    font-size: 16px;
+    font-style: normal;
+    font-variant: normal;
+    font-weight: 500;
+
+    bottom: 55px;
+    padding-left: 40px;
+}
+
+.subtitle {
+    position:absolute;
+    left:10px;
+    bottom:10px;
+    width:300px;
+    height:20px;
 }
 
 .env{
@@ -59,86 +130,24 @@ body{
     opacity:0.7;
 }
 
-.menu {
+.menuCode {
     position:absolute;
     top : 0px;
     left: 0px;
     width: 100%;
     padding-left: 10px;
     padding-top: 9px;
-    font-size: 17px;
-    font-style: normal;
-    font-variant: normal;
+    font-size: 16px;
     font-weight: 500;
     line-height: 23px;
-    pointer-events:auto;
-    cursor:pointer;
     height: 40px;
     background: none;
     border-bottom:1px solid rgba(255, 255, 255, 0.2);
-    z-index: 7;
-    overflow-y:auto;
+    overflow: hidden;
 }
 
-.menuPins {
-    right: 20px;
-    top: 10px;
-    width: 20px;
-    height: 20px;
-    position: absolute;
-    font-size: 18px;
-    font-style: normal;
-    font-variant: normal;
-    font-weight: 500;
-    line-height: 16px;
-    -ms-transform: rotate(90deg);
-    -webkit-transform: rotate(90deg);
-    transform: rotate(90deg);
-    /*line-height:17px;
-    font-weight: bold;*/
-    border:1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-    text-align: center;
-    background:none;
-    z-index: 8;
-}
 
-.menuButton {
-    position:absolute;
-    padding-left: 20px;
-    padding-top: 2px;
-    font-size: 17px;
-    font-style: normal;
-    font-variant: normal;
-    font-weight: 500;
-    line-height: 23px;
-    height: 30px;
-    left: -10px;
-    right: 0px;
-    background: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    pointer-events:none;
-    background:#0d0d0d;
-}
 
-.title {
-    position:absolute;
-    font-size: 17px;
-    font-style: normal;
-    font-variant: normal;
-    font-weight: 500;
-    line-height: 23px;
-    left:10px;
-    bottom:30px;
-}
-
-.subtitle {
-    position:absolute;
-    left:10px;
-    bottom:10px;
-    width:300px;
-    height:20px;
-}
 
 .info {
     pointer-events:none; position:absolute;
@@ -158,14 +167,7 @@ body{
     text-align:right;
 }
 
-#ribbon {
-    position: absolute; top:-50px; right:48px;
-    width:30px; height:200px; background:none; 
-    pointer-events:auto; cursor:pointer;
-    -ms-transform: rotate(-45deg);
-    -webkit-transform: rotate(-45deg);
-    transform: rotate(-45deg);
-}
+
 
 .separator {
     position:absolute; background-color:none; pointer-events:auto; display:block; 
@@ -218,7 +220,7 @@ body{
     pointer-events: auto;
    /*  overflow: scroll;*/
     height: 100%;
-    font-family: monospace;
+    font-family: "Lucida Console", Monaco, monospace;
     font-smooth: never;
     -webkit-font-smoothing : none;
     font-size: 11px;
